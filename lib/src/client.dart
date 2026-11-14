@@ -10,7 +10,7 @@ import 'models.dart';
 import 'status.dart';
 import 'webhooks.dart';
 
-const _version = '0.3.0';
+const _version = '0.4.0';
 const defaultBaseUrl = 'https://pay-api.technas.fr';
 const secretEnv = 'TECHNAS_PAY_SECRET';
 
@@ -24,6 +24,12 @@ class _Secret {
   final String mode;
   final String apiKey;
   final String webhookSecret;
+}
+
+void _positiveAmount(num amount) {
+  if (amount.isNaN || amount.isInfinite || amount <= 0) {
+    throw TechnasPayException('invalid_amount', 'amount doit être positif (5000 = 5 000 FCFA, 12.5 = 12,50 €)');
+  }
 }
 
 void _positiveInt(num amount, [String name = 'amount']) {
@@ -124,11 +130,15 @@ class TechnasPay {
   /// [reference] : UNE RÉFÉRENCE = UN ESSAI (`retryReference(orderId, attempt)`).
   /// [customer] : `{'email', 'name', 'phone'?, 'country'?}`, de vrais champs du client.
   /// Ne passez pas [currency] en zone franc CFA : elle suit le pays du client.
+  ///
+  /// [method] : `mobile_money` (défaut) ou `card` (exige [currency], un compte carte actif, et
+  /// permet les décimales : 12.5 = 12,50 €).
   Future<Payment> askForPayment({
-    required int amount,
+    required num amount,
     required String reference,
     required Map<String, String> customer,
     required String returnUrl,
+    String method = 'mobile_money',
     String? currency,
     String? description,
     Json? metadata,
@@ -136,14 +146,21 @@ class TechnasPay {
     List<String>? excludedCountries,
     bool askCountry = false,
   }) {
-    _positiveInt(amount);
+    if (method != 'mobile_money' && method != 'card') {
+      throw TechnasPayException('invalid_request', 'method vaut "mobile_money" ou "card"');
+    }
+    method == 'card' ? _positiveAmount(amount) : _positiveInt(amount);
     var resolved = currency?.trim().toUpperCase();
     if (resolved == null || resolved.isEmpty) {
       final country = customer['country']?.trim();
       resolved = (country != null && country.isNotEmpty) ? currencyForCountry(country) : _defaultCurrency;
     }
+    if (method == 'card' && (resolved == null || resolved.isEmpty)) {
+      throw TechnasPayException('currency_required', 'currency est obligatoire pour un paiement par carte (EUR, XOF…)');
+    }
     return _call('POST', '/v1/payments', (d) => Payment.fromJson(d as Json), {
       'amount': amount,
+      if (method == 'card') 'method': 'card',
       if (resolved != null) 'currency': resolved,
       'reference': reference,
       'customer': customer,
@@ -177,8 +194,10 @@ class TechnasPay {
 
   /// Rembourse un paiement `completed`, au numéro qui a payé. Sans [amount] : tout ce qui reste.
   /// [fees] : `partner` (défaut, le client reçoit tout) ou `customer`. Réservé à un administrateur.
-  Future<Refund> refund(String paymentId, {int? amount, String fees = 'partner', String? reference}) {
-    if (amount != null) _positiveInt(amount);
+  Future<Refund> refund(String paymentId, {num? amount, String fees = 'partner', String? reference}) {
+    // Décimales permises pour un paiement par carte ; Technas refuse un remboursement mobile money
+    // non entier (`invalid_amount`).
+    if (amount != null) _positiveAmount(amount);
     if (fees != 'partner' && fees != 'customer') {
       throw TechnasPayException('invalid_request', 'fees vaut "partner" ou "customer"');
     }
@@ -237,6 +256,29 @@ class TechnasPay {
       _call('PUT', '/v1/country-rules', CountryRules.fromJson, {'allowed': allowed, 'excluded': excluded});
 
   /// Ce que Technas vous doit, par devise.
+  /// Ouvre (ou reprend) votre compte carte : le RESPONSABLE ouvre `url` et y donne son identité et
+  /// sa banque. À appeler au clic (le lien expire en minutes). [country] (le vôtre) la 1ʳᵉ fois.
+  Future<CardOnboardingLink> startCardOnboarding({
+    required String returnUrl,
+    required String refreshUrl,
+    String? country,
+    String? email,
+    String? businessType,
+  }) =>
+      _call('POST', '/v1/card/onboarding', (d) => CardOnboardingLink.fromJson(d as Json), {
+        'return_url': returnUrl,
+        'refresh_url': refreshUrl,
+        if (country != null) 'country': country.trim().toUpperCase(),
+        if (email != null) 'email': email,
+        if (businessType != null) 'business_type': businessType,
+      });
+
+  /// `canAcceptPayments` décide de tout pour `askForPayment(method: 'card')`.
+  Future<CardAccount> getCardAccount() => _call('GET', '/v1/card/account', (d) => CardAccount.fromJson(d as Json));
+
+  /// https://dashboard.stripe.com/ : le responsable s'y connecte avec SES identifiants Stripe.
+  Future<String> getCardDashboardLink() => _call('POST', '/v1/card/dashboard-link', (d) => (d as Json)['url'] as String, {});
+
   Future<List<Balance>> getBalance() => _call(
       'GET', '/v1/balance', (d) => ((d as List?) ?? const []).map((r) => Balance(r['currency'] as String, r['amount'] as num)).toList());
 
@@ -286,8 +328,16 @@ class TechnasPay {
     required FutureOr<AppOrder?> Function(String orderId, User user) resolveOrder,
     String? returnUrl,
     WebhookHandlers? webhooks,
+    bool card = false,
+    FutureOr<Object?> Function(AppRequest request)? authorizeAdmin,
   }) =>
-      AppRoutes<User>(this, authorize: authorize, resolveOrder: resolveOrder, returnUrl: returnUrl, webhooks: webhooks);
+      AppRoutes<User>(this,
+          authorize: authorize,
+          resolveOrder: resolveOrder,
+          returnUrl: returnUrl,
+          webhooks: webhooks,
+          card: card,
+          authorizeAdmin: authorizeAdmin);
 
   // --- Webhooks ---------------------------------------------------------------------------
 

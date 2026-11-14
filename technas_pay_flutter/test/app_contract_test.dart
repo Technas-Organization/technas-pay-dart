@@ -18,7 +18,7 @@ void main() {
     final path = req['path'] as String;
     final method = req['method'] as String;
     // Le client n'appelle que les routes du contrat (pas de route inconnue côté app).
-    if (!(path == '/methods' || path.startsWith('/payments'))) continue;
+    if (!(path == '/methods' || path.startsWith('/payments') || path.startsWith('/card/'))) continue;
 
     test('contrat (client) : ${c['name']}', () async {
       final expected = c['expect'] as Map;
@@ -37,6 +37,12 @@ void main() {
 
       Future<Object> call() async {
         if (path == '/methods') return client.methods((req['query'] as Map)['orderId'] as String);
+        if (path == '/card/account') return client.cardAccount();
+        if (path == '/card/onboarding') {
+          final b = req['body'] as Map;
+          return client.startCardOnboarding(
+              returnUrl: b['returnUrl'] as String, refreshUrl: b['refreshUrl'] as String, country: b['country'] as String?);
+        }
         if (method == 'POST') return client.startPayment((req['body'] as Map).cast<String, Object?>());
         return client.readPayment(path.substring('/payments/'.length));
       }
@@ -59,12 +65,23 @@ void main() {
           expect(result.amount, p['amount']);
           expect(result.currency, p['currency']);
           expect(result.expiresAt, p['expires_at'] == null ? null : DateTime.parse(p['expires_at'] as String));
+          expect(result.method, p['method']);
+        } else if (result is TechnasCardAccount || result is TechnasCardOnboarding) {
+          final account = result is TechnasCardOnboarding ? result.account : result as TechnasCardAccount;
+          final a = (body['account'] as Map);
+          expect(account.status, a['status']);
+          expect(account.canAcceptPayments, a['can_accept_payments']);
+          if (result is TechnasCardOnboarding) {
+            expect(result.url, body['url']);
+            expect(result.kind, body['kind']);
+          }
         } else {
           final m = result as TechnasPayMethods;
           expect(m.amount, body['amount']);
           expect(m.methods.map((x) => [x.method, x.available, x.reason]).toList(),
               (body['methods'] as List).map((x) => [x['method'], x['available'], x['reason']]).toList());
-          expect(m.available.map((x) => x.method), ['mobile_money']);
+          expect(m.available.map((x) => x.method),
+              (body['methods'] as List).where((x) => x['available'] == true).map((x) => x['method']).toList());
         }
       }
 

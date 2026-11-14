@@ -10,8 +10,10 @@ permissions:
 
 jobs:
   test:
-    # ARC self-hosted (jamais ubuntu-latest). Dépôt privé : pas de PR de fork sur le runner.
-    runs-on: technas-backend-light
+    # Dépôt PUBLIC : machines GitHub, gratuites et isolées. Jamais les runners ARC du cluster ici :
+    # une PR venue d'un fork y exécuterait son code à côté du Nexus et de Vault (décision de
+    # Jonas, 15/11/2026). Ces tests n'ont besoin de rien chez nous (faux serveurs).
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
@@ -28,8 +30,8 @@ jobs:
         run: dart compile js -o build/web_smoke.js tool/web_smoke.dart
 
   flutter:
-    # Le paquet app : jamais de clé, relecture du statut, écrans d'état.
-    runs-on: technas-backend-light
+    # Le paquet app : jamais de clé, relecture du statut, écrans d'état. Dépôt public : machines GitHub.
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
       run:

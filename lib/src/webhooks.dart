@@ -53,7 +53,7 @@ class EventPayment {
 /// Un événement vérifié. Selon [type], un seul champ de contenu est rempli ; [data] garde le brut.
 /// [id] est stable d'une livraison à l'autre : servez-vous-en pour ignorer un doublon.
 class TechnasPayEvent {
-  TechnasPayEvent._(this.id, this.type, this.createdAt, this.data, {this.payment, this.refund, this.destination});
+  TechnasPayEvent._(this.id, this.type, this.createdAt, this.data, {this.payment, this.refund, this.destination, this.cardAccount});
 
   final String id;
   final String type;
@@ -62,6 +62,9 @@ class TechnasPayEvent {
   final EventPayment? payment;
   final Refund? refund;
   final PayoutDestinationView? destination;
+
+  /// `card_account.updated` : le nouvel état de votre compte carte.
+  final CardAccount? cardAccount;
 
   static TechnasPayEvent parse(Object? raw) {
     if (raw is! Map || raw['id'] is! String || raw['type'] is! String || raw['data'] is! Map) {
@@ -77,6 +80,9 @@ class TechnasPayEvent {
       }
       if (const {'refund.completed', 'refund.failed', 'refund.recorded'}.contains(type)) {
         return TechnasPayEvent._(id, type, createdAt, d, refund: Refund.fromJson(d));
+      }
+      if (type == 'card_account.updated') {
+        return TechnasPayEvent._(id, type, createdAt, d, cardAccount: CardAccount.fromJson(d));
       }
       if (type == 'payout_destination.change_scheduled' || type == 'payout_destination.updated') {
         return TechnasPayEvent._(id, type, createdAt, d, destination: PayoutDestinationView.fromJson(d));
@@ -144,6 +150,7 @@ class WebhookHandlers {
     this.onTopUp,
     this.onBalanceConverted,
     this.onFxModeUpdated,
+    this.onCardAccountUpdated,
   });
 
   /// Marquez la commande payée (`event.payment!.reference`).
@@ -164,6 +171,9 @@ class WebhookHandlers {
   /// Si ce n'est pas vous qui avez changé d'option, prévenez Technas (clé compromise ?).
   final WebhookCallback? onFxModeUpdated;
 
+  /// Votre compte carte a changé d'état (ouvert, à compléter, suspendu…).
+  final WebhookCallback? onCardAccountUpdated;
+
   WebhookCallback? forType(String type) {
     if (type == 'payment.completed') return onCompleted;
     if (type == 'payment.failed') return onFailed;
@@ -173,6 +183,7 @@ class WebhookHandlers {
     if (type == 'balance.topped_up') return onTopUp;
     if (type == 'balance.converted') return onBalanceConverted;
     if (type == 'fx_mode.updated') return onFxModeUpdated;
+    if (type == 'card_account.updated') return onCardAccountUpdated;
     return null; // type inconnu : acquitté sans rien appeler
   }
 }

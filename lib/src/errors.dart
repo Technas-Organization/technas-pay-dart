@@ -17,6 +17,7 @@ class TechnasPayException implements Exception {
     this.refundableAmount,
     this.reason,
     this.risk,
+    this.accountStatus,
   });
 
   factory TechnasPayException.fromResponse(int status, Object? data) {
@@ -31,6 +32,7 @@ class TechnasPayException implements Exception {
       refundableAmount: d['refundable_amount'] as num?,
       reason: d['reason'] as String?,
       risk: d['risk'] as String?,
+      accountStatus: d['account_status'] as String?,
     );
   }
 
@@ -51,6 +53,9 @@ class TechnasPayException implements Exception {
 
   /// `risk_not_accepted` : le texte du risque, à montrer à l'utilisateur.
   final String? risk;
+
+  /// `card_account_not_ready` : où en est votre compte carte (`not_started`, `onboarding`…).
+  final String? accountStatus;
 
   bool get retryable => code == 'network_error' || code == 'payment_in_progress' || status == 429 || status >= 500;
 
