@@ -73,6 +73,19 @@ class Payment {
   final String? completedAt;
   final String? expiresAt;
   final String? expiredAt;
+
+  /// Ce que VOTRE backend renvoie à votre app (`{"payment": toAppJson()}`) : ni commission, ni
+  /// montant net, ni métadonnées. C'est le contrat que lit `technas_pay_flutter`
+  /// (`TechnasPayHttpBackend`).
+  Map<String, Object?> toAppJson() => {
+        'id': id,
+        'reference': reference,
+        'status': status,
+        'checkout_url': checkoutUrl,
+        'amount': amount,
+        'currency': currency,
+        'expires_at': expiresAt,
+      };
 }
 
 class TransactionPage {

@@ -39,6 +39,13 @@ void main() {
     expect(pay.toString().contains(apiKey), isFalse);
   });
 
+  test('toAppJson ne rend à l\'app que le nécessaire', () async {
+    final p = await ask();
+    final j = p.toAppJson();
+    expect(j.keys, unorderedEquals(['id', 'reference', 'status', 'checkout_url', 'amount', 'currency', 'expires_at']));
+    expect(j['checkout_url'], p.checkoutUrl);
+  });
+
   test('la devise suit le pays CFA, jamais hors zone', () async {
     await ask(ref: 'r-cm', c: {...customer, 'country': 'cm'});
     expect((jsonDecode(gw.requests.last.body) as Map)['currency'], 'XAF');

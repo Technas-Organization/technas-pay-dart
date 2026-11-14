@@ -1,3 +1,9 @@
+## 0.2.0 — 2026-11-14
+
+- `Payment.toAppJson()` : la vue sans secret qu'un backend renvoie à son app (contrat de `technas_pay_flutter`).
+- Exemple shelf : routes `POST /technas-pay/payments` et `GET /technas-pay/payments/{id}`.
+- Nouveau paquet `technas_pay_flutter/` (0.1.0) : faire payer depuis une app Flutter sans clé, avec l'attente, la relecture et les écrans d'état en 6 langues.
+
 ## 0.1.0 — 2026-11-14
 
 Première version, alignée sur `@technas/pay` 0.9.0 et `technas-pay` (Python) 0.1.0.

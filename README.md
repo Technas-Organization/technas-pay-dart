@@ -12,6 +12,7 @@ Deux bibliothèques dans un paquet :
 |---|---|---|
 | `package:technas_pay/technas_pay.dart` | **Serveur** uniquement | Client complet avec le secret : paiements, remboursements, change, webhooks |
 | `package:technas_pay/app.dart` | App Flutter, web | Sans secret : statuts (`canRetry`, `isFinal`), `retryReference`, `isTechnasCheckoutUrl` |
+| `technas_pay_flutter` (sous-dossier) | App Flutter | Le flux complet : backend, page, attente, écrans d'état en 6 langues |
 
 Le client serveur **refuse de se construire dans une app Flutter** : un secret embarqué dans une app se lit en quelques minutes.
 
@@ -22,7 +23,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.1.0
+      ref: v0.2.0
 ```
 
 Sur le serveur, le secret remis par Technas va dans l'environnement :
@@ -77,29 +78,15 @@ Future<Response> onRequest(RequestContext context) async {
 
 Exemple complet, testé : [example/shelf_server.dart](example/shelf_server.dart). Signature refusée : 400, aucune fonction appelée. Une exception dans votre fonction remonte (500) : Technas relivrera.
 
-## 4. App Flutter : ouvrir la page de paiement
+## 4. App Flutter : le paquet `technas_pay_flutter`
 
-L'app ne parle **qu'à votre backend**. Exemple avec `url_launcher` :
+Pour faire payer depuis une app, utilisez [`technas_pay_flutter`](technas_pay_flutter/README.md), dans ce même dépôt. Il fait tout ce que l'app doit faire, sans clé :
+- demander le paiement à votre backend ;
+- ouvrir la page Technas, et elle seule ;
+- relire le statut au bon rythme et au retour dans l'app ;
+- afficher l'état : payé, refusé (pas définitif), expiré, « payer à nouveau ».
 
-```dart
-import 'package:technas_pay/app.dart';
-import 'package:url_launcher/url_launcher.dart';
-
-Future<void> payer(String orderId) async {
-  // 1. Votre backend crée le paiement (avec TechnasPay) et rend checkoutUrl.
-  final checkoutUrl = await monBackend.payerCommande(orderId);
-  // 2. On n'ouvre qu'une vraie page Technas.
-  if (!isTechnasCheckoutUrl(checkoutUrl)) throw StateError('Lien de paiement inattendu');
-  await launchUrl(Uri.parse(checkoutUrl!), mode: LaunchMode.externalApplication);
-}
-
-// 3. Au retour (returnUrl en lien profond, ou reprise de l'app), relisez le statut
-//    auprès de VOTRE backend, qui le tient du webhook.
-final status = await monBackend.statutCommande(orderId);
-if (canRetry(status)) { /* lien expiré : proposer de payer à nouveau */ }
-```
-
-La page `returnUrl` ne prouve rien : seul le webhook reçu par votre backend prouve le paiement.
+Côté serveur, renvoyez `payment.toAppJson()` : c'est le contrat qu'il lit.
 
 ## 5. Tout le reste (serveur)
 
