@@ -16,6 +16,7 @@ class TechnasPaymentState {
     this.amount,
     this.currency,
     this.expiresAt,
+    this.method = 'mobile_money',
   });
 
   /// Lit `{id, status, reference, checkout_url, amount, currency, expires_at}` (snake_case ou
@@ -37,6 +38,7 @@ class TechnasPaymentState {
       amount: pick('amount', 'amount') as num?,
       currency: pick('currency', 'currency') as String?,
       expiresAt: expires is String ? DateTime.tryParse(expires) : null,
+      method: (pick('method', 'method') as String?) ?? 'mobile_money',
     );
   }
 
@@ -52,6 +54,9 @@ class TechnasPaymentState {
   final String? currency;
   final DateTime? expiresAt;
 
+  /// `mobile_money` ou `card`.
+  final String method;
+
   bool get isFinal => tp.isFinal(status);
   bool get canRetry => tp.canRetry(status);
   bool get isPaid => status == tp.PaymentStatus.completed;
@@ -64,6 +69,7 @@ class TechnasPaymentState {
         amount: amount,
         currency: currency,
         expiresAt: expiresAt,
+        method: method,
       );
 }
 
@@ -174,6 +180,17 @@ class TechnasPayClient implements TechnasPayBackend {
   Future<TechnasPayMethods> methods(String orderId) async =>
       TechnasPayMethods.fromJson(await _send('GET', '/methods?orderId=${Uri.encodeQueryComponent(orderId)}', null));
 
+  /// Écran d'administration du MARCHAND (routes derrière `authorizeAdmin` côté serveur) : l'état
+  /// de son compte carte (`can_accept_payments`, `requirements`…).
+  Future<TechnasCardAccount> cardAccount() async =>
+      TechnasCardAccount.fromJson(((await _send('GET', '/card/account', null))['account'] as Map).cast());
+
+  /// Ouvre (ou reprend) l'inscription carte du MARCHAND : ouvrez `url` dans le navigateur, au clic
+  /// (le lien expire en minutes). [returnUrl] / [refreshUrl] : où il revient (fin / lien expiré).
+  Future<TechnasCardOnboarding> startCardOnboarding({required String returnUrl, required String refreshUrl, String? country}) async =>
+      TechnasCardOnboarding.fromJson(await _send('POST', '/card/onboarding',
+          jsonEncode({'returnUrl': returnUrl, 'refreshUrl': refreshUrl, if (country != null) 'country': country})));
+
   Future<Map<String, dynamic>> _send(String method, String path, String? body) async {
     final request = http.Request(method, Uri.parse('$_baseUrl$path'))
       ..headers.addAll({'Accept': 'application/json', if (body != null) 'Content-Type': 'application/json'});
@@ -214,4 +231,36 @@ class TechnasPayClient implements TechnasPayBackend {
 class TechnasPayHttpBackend extends TechnasPayClient {
   TechnasPayHttpBackend({required String baseUrl, super.headers, super.client, super.timeout})
       : super(baseUrl: '${baseUrl.replaceAll(RegExp(r'/+$'), '')}/technas-pay');
+}
+
+/// Le compte carte du marchand, tel que le serveur le montre à l'app.
+class TechnasCardAccount {
+  TechnasCardAccount.fromJson(Map<String, dynamic> j)
+      : status = j['status'] as String,
+        canAcceptPayments = j['can_accept_payments'] == true,
+        payoutsEnabled = j['payouts_enabled'] == true,
+        requirements = ((j['requirements'] as List?) ?? const []).cast<String>(),
+        disabledReason = j['disabled_reason'] as String?;
+
+  /// `not_started`, `onboarding`, `under_review`, `restricted`, `enabled`.
+  final String status;
+  final bool canAcceptPayments;
+  final bool payoutsEnabled;
+  final List<String> requirements;
+  final String? disabledReason;
+}
+
+class TechnasCardOnboarding {
+  TechnasCardOnboarding.fromJson(Map<String, dynamic> j)
+      : url = j['url'] as String,
+        kind = j['kind'] as String,
+        expiresAt = j['expires_at'] is String ? DateTime.tryParse(j['expires_at'] as String) : null,
+        account = TechnasCardAccount.fromJson((j['account'] as Map).cast());
+
+  final String url;
+
+  /// `onboarding` ou `dashboard`.
+  final String kind;
+  final DateTime? expiresAt;
+  final TechnasCardAccount account;
 }

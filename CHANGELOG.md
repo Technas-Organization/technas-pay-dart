@@ -1,3 +1,9 @@
+## 0.4.0 — 2026-11-15
+
+- Paiement par carte : `askForPayment(method: 'card', currency:)` (décimales), `startCardOnboarding`, `getCardAccount`, `getCardDashboardLink` (https://dashboard.stripe.com/), `accountStatus` sur `card_account_not_ready`, `onCardAccountUpdated`, `Payment.method`, remboursement `stripe`.
+- Routes de l'app : `card: true`, `authorizeAdmin` (`GET /card/account`, `POST /card/onboarding`), `POST /payments {method: 'card'}` (références `orderId-card-N`). `toAppJson` porte `method`.
+- `technas_pay_flutter` 0.3.0 : `TechnasPaymentState.method`, `cardAccount()`, `startCardOnboarding()`. Contrat v1 : 23 cas, rejoués des deux côtés.
+
 ## 0.3.0 — 2026-11-15
 
 - `pay.appRoutes(authorize:, resolveOrder:, returnUrl:, webhooks:)` et `technasPayShelfHandler` (`package:technas_pay/shelf.dart`, Dart Frog via `fromShelfHandler`) : les routes toutes faites que lit l'app. Essais expirés sautés automatiquement, propriété de la commande vérifiée à chaque lecture. `shelf` devient une dépendance.

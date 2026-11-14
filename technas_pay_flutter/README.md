@@ -49,7 +49,7 @@ C'est tout. L'app ouvre la page Technas, relit le statut, gère le refus, l'expi
 
 Routes : `GET /methods?orderId=`, `POST /payments` `{orderId}`, `GET /payments/{id}`, `POST /webhook`. La dernière est l'adresse de webhook à déclarer à Technas. Les essais expirés sont sautés tout seuls (`42-1`, `42-2`…) : rien à stocker côté serveur. Le contrat [`contract/app-contract.v1.json`](../contract/app-contract.v1.json) est rejoué par ce client et par chaque SDK serveur.
 
-`technasPay.methods(orderId)` rend les moyens ouverts pour une commande (mobile money ; la carte arrive avec le compte carte du marchand).
+`technasPay.methods(orderId)` rend les moyens ouverts pour une commande. La carte s'y ouvre quand le serveur monte les routes avec `card: true` et que le compte carte du marchand est prêt. Payer par carte : `order: {'orderId': id, 'method': 'card'}`. L'écran du marchand (jamais celui d'un client) dispose de `cardAccount()` et `startCardOnboarding(...)`.
 
 Vos routes s'appellent autrement ? Implémentez `TechnasPayBackend` (deux méthodes).
 
