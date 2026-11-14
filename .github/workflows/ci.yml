@@ -26,3 +26,22 @@ jobs:
           TECHNAS_PAY_SECRET: tps_test_pk_ci.ws_ci
       - name: app.dart tient dans une app web/Flutter (aucun dart:io)
         run: dart compile js -o build/web_smoke.js tool/web_smoke.dart
+
+  flutter:
+    # Le paquet app : jamais de clé, relecture du statut, écrans d'état.
+    runs-on: technas-backend-light
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: technas_pay_flutter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          # La version de BeautyGo et des apps Technas : material.dart y est le chemin normal.
+          flutter-version: 3.38.5
+          channel: stable
+      - run: flutter pub get
+      - run: dart format --output=none --set-exit-if-changed --line-length 140 lib test example
+      - run: flutter analyze --fatal-infos
+      - run: flutter test
