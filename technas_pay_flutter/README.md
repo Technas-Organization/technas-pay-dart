@@ -2,6 +2,10 @@
 
 Faites payer depuis une app Flutter via Technas Pay (mobile money en zone franc CFA et au-delà) **sans aucune clé dans l'app**.
 
+**Technas Pay réunit le mobile money et la carte dans un seul SDK, du serveur jusqu'à l'app Flutter.** 2 % par paiement réussi, sans abonnement, et une clé de test sans papier pour commencer.
+
+Devises et pays, pièces demandées, versements, comparaison avec les autres prestataires : [le hub Technas Pay](https://github.com/Technas-Organization/technas-pay).
+
 Votre backend crée le paiement et garde le secret. L'app ouvre la page Technas, relit l'état auprès de **votre** backend et l'affiche : préparation, attente, payé, refusé (pas définitif), expiré, vérification en cours.
 
 Vous intégrez avec un assistant de code ? Dites-lui de lire [AGENTS.md](AGENTS.md).
