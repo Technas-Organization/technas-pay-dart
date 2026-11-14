@@ -35,6 +35,7 @@ class Payment {
         commission = (j['commission'] as num?) ?? 0,
         netAmount = (j['net_amount'] as num?) ?? 0,
         status = j['status'] as String,
+        method = (j['method'] as String?) ?? 'mobile_money',
         refundedAmount = (j['refunded_amount'] as num?) ?? 0,
         originalAmount = j['original_amount'] as num?,
         originalCurrency = j['original_currency'] as String?,
@@ -58,6 +59,9 @@ class Payment {
   /// Ce qui vous revient.
   final num netAmount;
   final String status;
+
+  /// `mobile_money` ou `card`.
+  final String method;
   final num refundedAmount;
 
   /// Hors zone CFA : le montant demandé, en F CFA.
@@ -85,6 +89,7 @@ class Payment {
         'amount': amount,
         'currency': currency,
         'expires_at': expiresAt,
+        'method': method,
       };
 }
 
@@ -227,7 +232,8 @@ class Refund {
   final String status;
   final String? failure;
 
-  /// `payout` (renvoyé par Technas) | `external` (fait hors plateforme, seulement enregistré)
+  /// `payout` (renvoyé par Technas) | `stripe` (carte, remboursée depuis VOTRE compte carte) |
+  /// `external` (fait hors plateforme, seulement enregistré)
   final String kind;
   final String? method;
   final String? note;
@@ -322,4 +328,47 @@ class FxMode {
   final Map<String, String> risks;
   final CountryRules countryRules;
   final List<FxCountry> countries;
+}
+
+/// Où en est votre compte de paiement par carte : `not_started`, `onboarding`, `under_review`,
+/// `restricted` (`requirements`, `disabledReason`) ou `enabled`.
+class CardAccount {
+  CardAccount.fromJson(Json j)
+      : status = j['status'] as String,
+        canAcceptPayments = j['can_accept_payments'] == true,
+        payoutsEnabled = j['payouts_enabled'] == true,
+        detailsSubmitted = j['details_submitted'] == true,
+        country = j['country'] as String?,
+        requirements = ((j['requirements'] as List?) ?? const []).cast<String>(),
+        disabledReason = j['disabled_reason'] as String?,
+        testMode = j['test_mode'] == true,
+        updatedAt = j['updated_at'] as String?;
+
+  final String status;
+
+  /// Seule condition pour `askForPayment(method: 'card')`.
+  final bool canAcceptPayments;
+  final bool payoutsEnabled;
+  final bool detailsSubmitted;
+  final String? country;
+  final List<String> requirements;
+  final String? disabledReason;
+  final bool testMode;
+  final String? updatedAt;
+}
+
+class CardOnboardingLink {
+  CardOnboardingLink.fromJson(Json j)
+      : url = j['url'] as String,
+        kind = j['kind'] as String,
+        expiresAt = j['expires_at'] as String?,
+        account = CardAccount.fromJson(_map(j['account']));
+
+  /// À ouvrir par le RESPONSABLE du compte. Expire vite : à générer au clic.
+  final String url;
+
+  /// `onboarding` ou `dashboard`.
+  final String kind;
+  final String? expiresAt;
+  final CardAccount account;
 }

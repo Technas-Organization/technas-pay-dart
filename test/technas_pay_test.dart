@@ -42,8 +42,41 @@ void main() {
   test('toAppJson ne rend à l\'app que le nécessaire', () async {
     final p = await ask();
     final j = p.toAppJson();
-    expect(j.keys, unorderedEquals(['id', 'reference', 'status', 'checkout_url', 'amount', 'currency', 'expires_at']));
+    expect(j.keys, unorderedEquals(['id', 'reference', 'status', 'checkout_url', 'amount', 'currency', 'expires_at', 'method']));
     expect(j['checkout_url'], p.checkoutUrl);
+  });
+
+  test('carte : devise obligatoire, décimales, method envoyée ; compte carte', () async {
+    final seen = <Map>[];
+    final card = TechnasPay(
+      secret: secret,
+      baseUrl: base,
+      httpClient: MockClient((r) async {
+        seen.add(r.body.isEmpty ? {} : jsonDecode(r.body) as Map);
+        if (r.url.path == '/v1/payments') {
+          return http.Response(
+              jsonEncode({'id': 'c1', 'reference': 'r-card-1', 'amount': 12.5, 'currency': 'EUR', 'status': 'pending', 'method': 'card'}),
+              201);
+        }
+        if (r.url.path == '/v1/card/account') return http.Response('{"status":"enabled","can_accept_payments":true}', 200);
+        if (r.url.path == '/v1/card/dashboard-link') return http.Response('{"url":"https://dashboard.stripe.com/"}', 200);
+        return http.Response('{"code":"card_account_not_ready","message":"m","account_status":"onboarding"}', 409);
+      }),
+    );
+    expect(() => card.askForPayment(amount: 12.5, reference: 'r', customer: customer, returnUrl: 'https://p', method: 'card'),
+        throwsA(isA<TechnasPayException>().having((e) => e.code, 'code', 'currency_required')));
+    expect(() => card.askForPayment(amount: 12.5, reference: 'r', customer: customer, returnUrl: 'https://p'),
+        throwsA(isA<TechnasPayException>().having((e) => e.code, 'code', 'invalid_amount')));
+    final p = await card.askForPayment(
+        amount: 12.5, reference: 'r-card-1', customer: customer, returnUrl: 'https://p', method: 'card', currency: 'eur');
+    expect(p.method, 'card');
+    expect(seen.last['method'], 'card');
+    expect(seen.last['currency'], 'EUR');
+    expect((await card.getCardAccount()).canAcceptPayments, isTrue);
+    expect(await card.getCardDashboardLink(), 'https://dashboard.stripe.com/');
+    await expectLater(card.startCardOnboarding(returnUrl: 'https://a', refreshUrl: 'https://b', country: 'fr'),
+        throwsA(isA<TechnasPayException>().having((e) => e.accountStatus, 'accountStatus', 'onboarding')));
+    expect(seen.last['country'], 'FR');
   });
 
   test('la devise suit le pays CFA, jamais hors zone', () async {
