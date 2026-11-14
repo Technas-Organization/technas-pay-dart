@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    # ARC self-hosted (jamais ubuntu-latest). Dépôt privé : pas de PR de fork sur le runner.
+    runs-on: technas-backend-light
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - run: dart pub get
+      - run: dart format --output=none --set-exit-if-changed --line-length 140 lib test example tool
+      - run: dart analyze --fatal-infos
+      - run: dart test
+        env:
+          TECHNAS_PAY_SECRET: tps_test_pk_ci.ws_ci
+      - name: app.dart tient dans une app web/Flutter (aucun dart:io)
+        run: dart compile js -o build/web_smoke.js tool/web_smoke.dart

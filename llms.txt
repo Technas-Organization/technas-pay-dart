@@ -1,0 +1,12 @@
+# technas_pay (Dart)
+
+> SDK Dart pour encaisser du mobile money en Afrique via Technas Pay. `package:technas_pay/technas_pay.dart` : client SERVEUR avec secret (shelf, Dart Frog), refusé dans une app Flutter. `package:technas_pay/app.dart` : partie app SANS secret (isTechnasCheckoutUrl, canRetry, isFinal, retryReference).
+
+Agents de code : lisez d'abord AGENTS.md. Jamais de secret dans une app Flutter : l'app demande checkoutUrl à son backend, vérifie isTechnasCheckoutUrl, l'ouvre, relit le statut auprès du backend.
+
+Une référence = un essai : `retryReference(orderId, attempt)`. Relancez avec une NOUVELLE référence seulement après payment.expired (`canRetry`), jamais sur failed. Rejouer la référence d'un paiement expiré lève TechnasPayException code payment_expired (409).
+
+- [AGENTS.md](AGENTS.md) : règles pour un agent de code
+- [README.md](README.md) : guide complet, serveur et Flutter
+- [lib/src/client.dart](lib/src/client.dart) : chaque méthode et sa documentation
+- [example/shelf_server.dart](example/shelf_server.dart) : serveur shelf complet
