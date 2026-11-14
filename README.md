@@ -23,7 +23,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.2.0
+      ref: v0.3.0
 ```
 
 Sur le serveur, le secret remis par Technas va dans l'environnement :
@@ -77,6 +77,25 @@ Future<Response> onRequest(RequestContext context) async {
 ```
 
 Exemple complet, testé : [example/shelf_server.dart](example/shelf_server.dart). Signature refusée : 400, aucune fonction appelée. Une exception dans votre fonction remonte (500) : Technas relivrera.
+
+## Pour une app : les routes toutes faites
+
+```dart
+import 'package:technas_pay/shelf.dart';
+
+final routes = pay.appRoutes<MonUser>(
+  authorize: (req) => sessions.user(req.headers['authorization']),          // null → 401
+  resolveOrder: (orderId, user) async {                                       // relue EN BASE, null → 404
+    final o = await db.order(orderId, userId: user.id);
+    return o == null ? null : AppOrder(amount: o.total, customer: {'email': user.email, 'name': user.name});
+  },
+  returnUrl: 'https://votre-app.com/paiement/retour',
+  webhooks: WebhookHandlers(onCompleted: (e) => db.markPaid(e.payment!.reference)),
+);
+final router = Router()..mount('/api/technas-pay/', technasPayShelfHandler(routes)); // Dart Frog : fromShelfHandler
+```
+
+Votre app Flutter les appelle avec `TechnasPayClient(baseUrl: '…/api/technas-pay')`. Contrat : [`contract/app-contract.v1.json`](contract/app-contract.v1.json), rejoué ici, côté Flutter et dans les SDK Node et Python.
 
 ## 4. App Flutter : le paquet `technas_pay_flutter`
 

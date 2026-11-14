@@ -1,14 +1,16 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:http/http.dart' as http;
 
+import 'app_routes.dart';
 import 'errors.dart';
 import 'models.dart';
 import 'status.dart';
 import 'webhooks.dart';
 
-const _version = '0.2.0';
+const _version = '0.3.0';
 const defaultBaseUrl = 'https://pay-api.technas.fr';
 const secretEnv = 'TECHNAS_PAY_SECRET';
 
@@ -274,6 +276,18 @@ class TechnasPay {
     if (response.statusCode == 404) throw TechnasPayException('payment_not_found', 'Paiement de test introuvable', status: 404);
     return getPayment(paymentId);
   }
+
+  /// Routes toutes faites pour votre app Flutter (`technas_pay_flutter`) : démarrer le paiement
+  /// d'une commande, relire son statut, les moyens ouverts, le webhook. Vous ne fournissez que
+  /// [authorize] (votre authentification) et [resolveOrder] (la commande relue en base).
+  /// Adaptateur shelf : `package:technas_pay/shelf.dart`.
+  AppRoutes<User> appRoutes<User extends Object>({
+    required FutureOr<User?> Function(AppRequest request) authorize,
+    required FutureOr<AppOrder?> Function(String orderId, User user) resolveOrder,
+    String? returnUrl,
+    WebhookHandlers? webhooks,
+  }) =>
+      AppRoutes<User>(this, authorize: authorize, resolveOrder: resolveOrder, returnUrl: returnUrl, webhooks: webhooks);
 
   // --- Webhooks ---------------------------------------------------------------------------
 

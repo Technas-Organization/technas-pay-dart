@@ -1,6 +1,6 @@
 name: technas_pay
 description: Encaisser des paiements mobile money (zone franc CFA et au-delà) via Technas, depuis un serveur Dart (shelf, Dart Frog). Partie app sans secret pour Flutter.
-version: 0.2.0
+version: 0.3.0
 repository: https://github.com/Technas-Organization/technas-pay-dart
 publish_to: none # pub.dev : accord de Jonas d'abord
 
@@ -10,8 +10,8 @@ environment:
 dependencies:
   crypto: ^3.0.3
   http: ^1.2.0
+  shelf: ^1.4.1
 
 dev_dependencies:
   lints: ^5.0.0
-  shelf: ^1.4.1
   test: ^1.25.0

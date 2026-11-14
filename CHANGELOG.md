@@ -1,3 +1,9 @@
+## 0.3.0 — 2026-11-15
+
+- `pay.appRoutes(authorize:, resolveOrder:, returnUrl:, webhooks:)` et `technasPayShelfHandler` (`package:technas_pay/shelf.dart`, Dart Frog via `fromShelfHandler`) : les routes toutes faites que lit l'app. Essais expirés sautés automatiquement, propriété de la commande vérifiée à chaque lecture. `shelf` devient une dépendance.
+- `technas_pay_flutter` 0.2.0 : `TechnasPayClient(baseUrl:)` sur ces routes, `methods(orderId)`. `TechnasPayHttpBackend` reste pour l'ancien chemin.
+- Contrat partagé `contract/app-contract.v1.json` (13 cas), rejoué par le serveur et par le client.
+
 ## 0.2.0 — 2026-11-14
 
 - `Payment.toAppJson()` : la vue sans secret qu'un backend renvoie à son app (contrat de `technas_pay_flutter`).
