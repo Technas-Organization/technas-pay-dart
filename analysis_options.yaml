@@ -1,5 +1,7 @@
 include: package:lints/recommended.yaml
 
 analyzer:
+  exclude:
+    - technas_pay_flutter/**
   language:
     strict-casts: false

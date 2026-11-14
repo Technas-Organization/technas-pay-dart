@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.1.0
+      ref: v0.2.0
 ```
 
 ## Quelle méthode pour quoi
