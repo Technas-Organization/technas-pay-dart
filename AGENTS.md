@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.2.0
+      ref: v0.3.0
 ```
 
 ## Quelle méthode pour quoi
@@ -50,6 +50,10 @@ dependencies:
 | Numéro de reversement (administrateur) | `pay.getPayoutNetworks('TG')`, `pay.getPayoutDestination()`, `pay.setPayoutDestination(PayoutDestination(...))` |
 | Tester la route webhook | `pay.createTestWebhook('payment.completed', reference: ..., amount: ..., currency: 'XOF')` |
 | Jouer le payeur en test | `pay.simulateTestPayment(id, 'completed' \| 'failed' \| 'expired')` |
+
+## App Flutter
+
+Ne réécrivez pas de routes : `technasPayShelfHandler(pay.appRoutes(authorize: ..., resolveOrder: ..., returnUrl: ..., webhooks: ...))` monté sur `/api/technas-pay/` (`package:technas_pay/shelf.dart`). `resolveOrder` relit la commande EN BASE et rend `null` si elle n'est pas à cet utilisateur.
 
 ## Étapes
 

@@ -10,13 +10,13 @@ Consignes pour un assistant de code (Codex, Claude Code…). Appliquez-les dans 
 
 ## Étapes
 
-1. **Backend** : ajoutez les deux routes du contrat (voir le README, § 2).
-   - `POST /technas-pay/payments` avec `{"orderId"}` : relire la commande et son montant EN BASE ; `askForPayment(reference: retryReference(orderId, attempt))` ; garder `payment.id` ; rendre `{"payment": payment.toAppJson()}`.
-   - `GET /technas-pay/payments/{id}` : vérifier que le paiement appartient à l'utilisateur connecté ; rendre `{"payment": payment.toAppJson()}`.
-   - Le webhook (`handleWebhook`, `onCompleted`) marque la commande payée ; `onExpired` incrémente `attempt`.
-2. **App** : `TechnasPayHttpBackend(baseUrl:, headers: () async => {...jeton de session de l'utilisateur...})`, puis `showTechnasPayment(context, backend:, order: {'orderId': id})`.
-3. **Lien de retour** : un `returnUrl` https en App Link / Universal Link vers l'app (README, § 4). Optionnel : le SDK relit le statut au retour au premier plan dans tous les cas.
-4. **Test** : un test de widget avec un faux `TechnasPayBackend` (modèle : `test/flow_test.dart`), puis un vrai essai avec le secret `tps_test_` du backend (page de test : « réussi », « refusé », « expiration »).
+1. **Backend : n'écrivez PAS de routes.** Montez celles du SDK serveur sous `/api/technas-pay` (tableau du README) : `pay.appRoutes({ authorize, resolveOrder, returnUrl, webhooks })` (Node/Next), `pay.app_routes(...)` (Python), `technasPayShelfHandler(pay.appRoutes(...))` (Dart).
+   - `authorize(request)` : l'authentification EXISTANTE de l'app (jeton de session) ; `null` → 401.
+   - `resolveOrder(orderId, user)` : relire la commande EN BASE, vérifier qu'elle est à `user`, rendre `{amount, customer: {email, name}}` ; sinon `null`.
+   - `webhooks.onCompleted` marque la commande payée. Donnez à l'utilisateur l'adresse `…/api/technas-pay/webhook` à transmettre à Technas.
+2. **App** : `TechnasPayClient(baseUrl: '…/api/technas-pay', headers: () async => {...jeton de session...})`, puis `showTechnasPayment(context, backend: technasPay, order: {'orderId': id})`.
+3. **Lien de retour** : `returnUrl` https en App Link / Universal Link (README, § 4). Optionnel : le SDK relit au retour au premier plan.
+4. **Test** : un test de widget avec un faux `TechnasPayBackend` (modèle : `test/flow_test.dart`), puis un vrai essai avec le secret `tps_test_` du backend.
 
 ## À respecter
 

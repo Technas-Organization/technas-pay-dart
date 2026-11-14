@@ -85,27 +85,60 @@ abstract class TechnasPayBackend {
 
 /// Erreur de dialogue avec VOTRE backend (réseau, 4xx, 5xx, réponse illisible).
 class TechnasBackendException implements Exception {
-  TechnasBackendException(this.message, {this.status = 0, this.code});
+  TechnasBackendException(this.message, {this.status = 0, this.code, bool? retryable}) : _retryable = retryable;
   final String message;
   final int status;
-  final String? code;
 
-  /// Vrai si relire plus tard a du sens (réseau, 429, 5xx).
-  bool get retryable => status == 0 || status == 429 || status >= 500;
+  /// Le code du contrat (`unauthorized`, `order_not_found`, `payment_expired`…), ou `null`.
+  final String? code;
+  final bool? _retryable;
+
+  /// Vrai si relire ou refaire plus tard a du sens : ce que dit le serveur (`retryable`), sinon
+  /// réseau, 429 ou 5xx.
+  bool get retryable => _retryable ?? (status == 0 || status == 429 || status >= 500);
 
   @override
   String toString() => 'TechnasBackendException($status${code == null ? '' : ', $code'}): $message';
 }
 
-/// Implémentation prête du contrat HTTP par défaut, que les SDK serveur Technas Pay exposent :
+/// Un moyen de paiement proposé pour une commande (`GET /methods`).
+class TechnasPayMethod {
+  const TechnasPayMethod({required this.method, required this.available, this.reason});
+
+  factory TechnasPayMethod.fromJson(Map<String, dynamic> j) =>
+      TechnasPayMethod(method: j['method'] as String, available: j['available'] == true, reason: j['reason'] as String?);
+
+  /// `mobile_money`, `card`…
+  final String method;
+  final bool available;
+
+  /// Pourquoi il n'est pas ouvert (`not_enabled`…).
+  final String? reason;
+}
+
+class TechnasPayMethods {
+  const TechnasPayMethods({required this.methods, this.amount, this.currency});
+
+  factory TechnasPayMethods.fromJson(Map<String, dynamic> j) => TechnasPayMethods(
+        amount: j['amount'] as num?,
+        currency: j['currency'] as String?,
+        methods: ((j['methods'] as List?) ?? const []).map((m) => TechnasPayMethod.fromJson((m as Map).cast())).toList(),
+      );
+
+  final num? amount;
+  final String? currency;
+  final List<TechnasPayMethod> methods;
+
+  Iterable<TechnasPayMethod> get available => methods.where((m) => m.available);
+}
+
+/// Le client des routes toutes faites des SDK serveur Technas Pay (`pay.appRoutes`,
+/// `pay.app_routes`) : contrat `contract/app-contract.v1.json`, rien à écrire côté serveur.
 ///
-/// - `POST {baseUrl}/technas-pay/payments`, corps = [TechnasPayBackend.startPayment] `order` ;
-/// - `GET  {baseUrl}/technas-pay/payments/{id}`.
-///
-/// Les deux rendent `{"payment": {id, status, reference, checkout_url, amount, currency, expires_at}}`.
+/// [baseUrl] : là où votre backend a monté les routes, ex. `https://api.votre-app.com/api/technas-pay`.
 /// [headers] : l'authentification de VOTRE utilisateur (jeton de session), jamais une clé Technas.
-class TechnasPayHttpBackend implements TechnasPayBackend {
-  TechnasPayHttpBackend({
+class TechnasPayClient implements TechnasPayBackend {
+  TechnasPayClient({
     required String baseUrl,
     this.headers,
     http.Client? client,
@@ -120,14 +153,28 @@ class TechnasPayHttpBackend implements TechnasPayBackend {
   /// Appelée à chaque requête : rend des en-têtes frais (jeton renouvelé).
   final Future<Map<String, String>> Function()? headers;
 
+  /// `POST /payments` avec `{orderId}` : le serveur relit la commande, son montant compris.
   @override
-  Future<TechnasPaymentState> startPayment(Map<String, Object?> order) => _send('POST', '/technas-pay/payments', jsonEncode(order));
+  Future<TechnasPaymentState> startPayment(Map<String, Object?> order) async => _state(await _send('POST', '/payments', jsonEncode(order)));
 
+  /// `GET /payments/{id}`.
   @override
-  Future<TechnasPaymentState> readPayment(String paymentId) =>
-      _send('GET', '/technas-pay/payments/${Uri.encodeComponent(paymentId)}', null);
+  Future<TechnasPaymentState> readPayment(String paymentId) async =>
+      _state(await _send('GET', '/payments/${Uri.encodeComponent(paymentId)}', null));
 
-  Future<TechnasPaymentState> _send(String method, String path, String? body) async {
+  static TechnasPaymentState _state(Map<String, dynamic> data) {
+    try {
+      return TechnasPaymentState.fromJson(data);
+    } on FormatException catch (e) {
+      throw TechnasBackendException(e.message, status: 200);
+    }
+  }
+
+  /// `GET /methods?orderId=` : les moyens ouverts pour cette commande, avec son montant.
+  Future<TechnasPayMethods> methods(String orderId) async =>
+      TechnasPayMethods.fromJson(await _send('GET', '/methods?orderId=${Uri.encodeQueryComponent(orderId)}', null));
+
+  Future<Map<String, dynamic>> _send(String method, String path, String? body) async {
     final request = http.Request(method, Uri.parse('$_baseUrl$path'))
       ..headers.addAll({'Accept': 'application/json', if (body != null) 'Content-Type': 'application/json'});
     if (headers != null) request.headers.addAll(await headers!());
@@ -150,13 +197,21 @@ class TechnasPayHttpBackend implements TechnasPayBackend {
         (map['message'] as String?) ?? 'Réponse HTTP ${response.statusCode}',
         status: response.statusCode,
         code: map['code'] as String?,
+        retryable: map['retryable'] is bool ? map['retryable'] as bool : null,
       );
     }
     if (data is! Map) throw TechnasBackendException('Réponse illisible', status: response.statusCode);
     try {
-      return TechnasPaymentState.fromJson(data.cast<String, dynamic>());
-    } on FormatException catch (e) {
-      throw TechnasBackendException(e.message, status: response.statusCode);
+      return data.cast<String, dynamic>();
+    } on TypeError {
+      throw TechnasBackendException('Réponse illisible', status: response.statusCode);
     }
   }
+}
+
+/// L'ancien contrat (routes écrites à la main sous `{baseUrl}/technas-pay/payments`).
+/// Préférez [TechnasPayClient] et les routes toutes faites de votre SDK serveur.
+class TechnasPayHttpBackend extends TechnasPayClient {
+  TechnasPayHttpBackend({required String baseUrl, super.headers, super.client, super.timeout})
+      : super(baseUrl: '${baseUrl.replaceAll(RegExp(r'/+$'), '')}/technas-pay');
 }

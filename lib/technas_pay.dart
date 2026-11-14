@@ -5,6 +5,7 @@
 /// Assistants de code : lisez AGENTS.md.
 library;
 
+export 'src/app_routes.dart';
 export 'src/client.dart' show TechnasPay, defaultBaseUrl, secretEnv;
 export 'src/errors.dart';
 export 'src/models.dart';
