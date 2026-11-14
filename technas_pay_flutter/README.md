@@ -6,54 +6,52 @@ Votre backend crée le paiement et garde le secret. L'app ouvre la page Technas,
 
 Vous intégrez avec un assistant de code ? Dites-lui de lire [AGENTS.md](AGENTS.md).
 
+## Intégration complète
+
+**Côté serveur** (ici Node/Express ; Python, Next.js et Dart plus bas), les routes sont toutes faites. Vous ne fournissez que votre authentification et la lecture de la commande en base :
+
+```js
+const routes = pay.appRoutes({
+  authorize: (req) => verifierSession(req.headers.authorization),        // null → 401
+  resolveOrder: async (orderId, user) => {                                // relue EN BASE, null → 404
+    const o = await db.orders.find({ id: orderId, userId: user.id });
+    return o && { amount: o.total, customer: { email: user.email, name: user.name } };
+  },
+  returnUrl: "https://votre-app.com/paiement/retour",
+  webhooks: { onCompleted: (e) => db.orders.markPaid(e.payment.reference) },
+});
+app.use("/api/technas-pay", routes.node);
 ```
-App Flutter ──(1) POST /technas-pay/payments {orderId}──▶ Votre backend ──askForPayment──▶ Technas Pay
-            ◀──── {payment: {id, status, checkout_url…}} ──             (secret ici seulement)
-App ──(2) ouvre checkout_url (page Technas : pays, opérateur, validation) 
-App ──(3) GET /technas-pay/payments/{id} ──▶ Votre backend (statut tenu par le webhook) 
-```
 
-## 1. Installer
-
-```yaml
-dependencies:
-  technas_pay_flutter:
-    git:
-      url: https://github.com/Technas-Organization/technas-pay-dart.git
-      path: technas_pay_flutter
-      ref: v0.2.0
-```
-
-## 2. Côté backend : deux routes
-
-Votre backend utilise un SDK serveur Technas Pay ([Python](https://github.com/Technas-Organization/technas-pay-python), [Node](https://github.com/Technas-Organization/technas-pay-node), [Dart](../README.md)) et expose :
-
-| Route | Rôle |
-|---|---|
-| `POST /technas-pay/payments` (corps : `{"orderId": "42"}`) | Relit la commande **en base** (montant compris), appelle `askForPayment` avec `reference = orderId-tentative`, garde `payment.id`, rend `{"payment": payment.toAppJson()}` |
-| `GET /technas-pay/payments/{id}` | Vérifie que ce paiement appartient à l'utilisateur connecté, rend `{"payment": (getPayment(id)).toAppJson()}` |
-
-`toAppJson()` (`to_app_json()` en Python) ne rend que `id, reference, status, checkout_url, amount, currency, expires_at`. Ni commission, ni métadonnées. Exemple complet : [example/shelf_server.dart](../example/shelf_server.dart).
-
-Les routes s'appellent autrement chez vous ? Implémentez `TechnasPayBackend` (deux méthodes) au lieu d'utiliser `TechnasPayHttpBackend`.
-
-## 3. Côté app
+**Côté app** :
 
 ```dart
 import 'package:technas_pay_flutter/technas_pay_flutter.dart';
 
-final backend = TechnasPayHttpBackend(
-  baseUrl: 'https://api.votre-app.com',
+final technasPay = TechnasPayClient(
+  baseUrl: 'https://api.votre-app.com/api/technas-pay',
   headers: () async => {'Authorization': 'Bearer ${await session.token()}'}, // VOTRE session
 );
 
-final result = await showTechnasPayment(context, backend: backend, order: {'orderId': order.id});
-if (result?.isPaid ?? false) {
-  // Affichez la commande payée. Elle l'est en base parce que votre backend a reçu le webhook.
-}
+final result = await showTechnasPayment(context, backend: technasPay, order: {'orderId': order.id});
+if (result?.isPaid ?? false) { /* la commande est payée (votre backend a reçu le webhook) */ }
 ```
 
-Pour l'intégrer dans votre propre écran, utilisez `TechnasPaymentController` (`start`, `reopen`, `retry`, `checkNow`, `phase`, `state`) et `TechnasPaymentView`.
+C'est tout. L'app ouvre la page Technas, relit le statut, gère le refus, l'expiration et le nouvel essai. Elle n'a jamais la clé et n'envoie jamais le montant.
+
+| Serveur | Montage des routes |
+|---|---|
+| Node / Express / Nest | `app.use("/api/technas-pay", pay.appRoutes({...}).node)` (avant `express.json()`) |
+| Next.js | `app/api/technas-pay/[...path]/route.ts` : `export const { GET, POST } = pay.appRoutes({...}).nextHandlers("/api/technas-pay")` |
+| Python FastAPI | `app.include_router(pay.app_routes(authorize=..., resolve_order=...).fastapi_router())` |
+| Python Flask / Django | `.flask_blueprint()` / `path("api/technas-pay/<path:rest>", routes.django_view())` |
+| Dart shelf / Dart Frog | `technasPayShelfHandler(pay.appRoutes(...))` monté sur `/api/technas-pay/` (`package:technas_pay/shelf.dart`) |
+
+Routes : `GET /methods?orderId=`, `POST /payments` `{orderId}`, `GET /payments/{id}`, `POST /webhook`. La dernière est l'adresse de webhook à déclarer à Technas. Les essais expirés sont sautés tout seuls (`42-1`, `42-2`…) : rien à stocker côté serveur. Le contrat [`contract/app-contract.v1.json`](../contract/app-contract.v1.json) est rejoué par ce client et par chaque SDK serveur.
+
+`technasPay.methods(orderId)` rend les moyens ouverts pour une commande (mobile money ; la carte arrive avec le compte carte du marchand).
+
+Vos routes s'appellent autrement ? Implémentez `TechnasPayBackend` (deux méthodes).
 
 ## 4. Configuration
 
