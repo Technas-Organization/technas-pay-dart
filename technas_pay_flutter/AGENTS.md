@@ -28,7 +28,11 @@ Consignes pour un assistant de code (Codex, Claude Code…). Appliquez-les dans 
 - **Ne baissez pas le rythme de relecture sous 2 s** : chaque relecture appelle le backend.
 - Gardez les textes du SDK, ou passez des `TechnasPayTexts` complets. Ne mélangez pas les langues.
 
+## Carte
+
+- Si le serveur monte les routes avec `card: true` : `technasPay.methods(orderId)` dit si la carte est ouverte (`available`). Puis `showTechnasPayment(..., order: {'orderId': id, 'method': 'card'})` : la page Technas encaisse la carte, le reste du flux est le même.
+- Écran du MARCHAND seulement (jamais celui d'un client) : `technasPay.cardAccount()` et `technasPay.startCardOnboarding(returnUrl:, refreshUrl:, country:)`. Le serveur les refuse (403) à tout autre que le marchand (`authorizeAdmin`).
+
 ## À venir
 
-- Paiement par carte natif (PaymentSheet, Apple Pay, Google Pay) : dans une prochaine version. D'ici là, la carte passe par la page hébergée, avec le même code.
-- Champ téléphone avec indicatif et vérification par SMS : paquet `technas_phone`.
+- Feuille de paiement par carte native (PaymentSheet, Apple Pay, Google Pay) : d'ici là, la carte passe par la page hébergée, avec le même code.

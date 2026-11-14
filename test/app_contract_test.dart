@@ -33,7 +33,7 @@ class Gateway {
 AppOrder? _order(Map<String, dynamic> c, String id) {
   final o = (c['orders'] as Map)[id] as Map?;
   if (o == null) return null;
-  return AppOrder(amount: o['amount'] as int, customer: (o['customer'] as Map).cast<String, String>());
+  return AppOrder(amount: o['amount'] as num, currency: o['currency'] as String?, customer: (o['customer'] as Map).cast<String, String>());
 }
 
 AppRoutes<String> routesFor(Map<String, dynamic> c, TechnasPay pay, {WebhookHandlers? webhooks}) => pay.appRoutes<String>(
@@ -41,6 +41,8 @@ AppRoutes<String> routesFor(Map<String, dynamic> c, TechnasPay pay, {WebhookHand
       resolveOrder: (id, user) => user == c['user'] ? _order(c, id) : null,
       returnUrl: 'https://app.test/retour',
       webhooks: webhooks,
+      card: ((c['options'] as Map?)?['card'] as bool?) ?? false,
+      authorizeAdmin: c.containsKey('admin') ? (_) => c['admin'] : null,
     );
 
 void main() {

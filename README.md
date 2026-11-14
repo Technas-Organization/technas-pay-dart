@@ -23,7 +23,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.3.0
+      ref: v0.4.0
 ```
 
 Sur le serveur, le secret remis par Technas va dans l'environnement :
@@ -126,6 +126,15 @@ Côté serveur, renvoyez `payment.toAppJson()` : c'est le contrat qu'il lit.
 | `simulateTestPayment(id, 'completed'\|'failed'\|'expired')` | Jouer le payeur en test |
 
 Erreurs : `TechnasPayException` avec `code` (à tester), `retryable`, et selon le code `missingAmount`, `refundableAmount`, `reason`, `risk`. Liste et conduite à tenir : [AGENTS.md](AGENTS.md#erreurs).
+
+## Paiement par carte
+
+1. **Compte carte, une fois** : au clic du RESPONSABLE, `final link = await pay.startCardOnboarding(country: 'TG', returnUrl: ..., refreshUrl: ...)`, puis redirigez-le vers `link.url` (identité et banque ; le lien expire en minutes).
+2. **Attendez `(await pay.getCardAccount()).canAcceptPayments`** (ou `onCardAccountUpdated`). Avant, `method: 'card'` lève `card_account_not_ready` (`e.accountStatus`).
+3. **Faire payer** : `pay.askForPayment(method: 'card', amount: 12.5, currency: 'EUR', ...)`. Devise obligatoire, décimales permises.
+4. **L'argent va directement sur le compte carte**, commission Technas déjà retirée : il n'apparaît pas dans `getBalance()`. Un remboursement repart sur la carte (`refund.kind == 'stripe'`).
+5. **Tableau de bord** : `pay.getCardDashboardLink()` → https://dashboard.stripe.com/, identifiants Stripe du responsable.
+6. **App** : `pay.appRoutes(..., card: true, authorizeAdmin: ...)`. Côté Flutter, `order: {'orderId': id, 'method': 'card'}` ; l'écran du marchand utilise `cardAccount()` et `startCardOnboarding(...)` de `TechnasPayClient`.
 
 ## La règle de relance
 
