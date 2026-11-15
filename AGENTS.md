@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.5.0
+      ref: v0.5.1
 ```
 
 ## Quelle méthode pour quoi
@@ -113,7 +113,7 @@ Ne réécrivez pas de routes : `technasPayShelfHandler(pay.appRoutes(authorize: 
 En réel, un compte sans pièce d'identité vérifiée voit ses **nouveaux** paiements mobile money refusés (`kyc_required`) au-delà de 1 000 000 F CFA encaissés en cumul, ou 30 jours après son premier paiement réel encaissé. Rien de ce qui existe n'est bloqué (paiement en cours, remboursement, reversement, lecture). La carte n'est pas concernée. Le responsable du compte dépose sa pièce dans la console (`consoleUrl`).
 
 - **Lisez `pay.getAccountKyc()`** pour afficher l'état au **marchand** (tableau de bord, écran d'administration), jamais au client final : `stage` (`ok`, `soon`, `blocked`, `verified`, `not_applicable`), `collectedXof` / `thresholdXof`, `deadline`, `consoleUrl`. Une valeur inconnue de `stage`, `level` ou `reason` est gardée telle quelle : traitez-la comme « à vérifier dans la console ».
-- **Branchez `onKycRequired`** (avis `account.kyc_required`, envoyé à 80 % du seuil, 7 jours avant l'échéance, puis au premier refus) : prévenez le responsable avec `event.kycRequired!.consoleUrl`.
+- **Branchez `onKycRequired`** (avis `account.kyc_required`, envoyé à 80 % du seuil, 7 jours avant l'échéance, puis au premier refus) : prévenez le responsable avec `event.kycRequired!.consoleUrl`. L'avis porte aussi l'état du compte, comme `getAccountKyc()` : `stage`, `blockReason` (`amount` | `duration`), `daysElapsed`, `graceDays`, `firstCollectedAt` ; tous facultatifs (`null` sur un avis plus ancien).
 - **Sur `kyc_required`** : proposez la carte si elle est ouverte, sinon expliquez au client que le paiement mobile money n'est pas disponible pour le moment. **Ne réessayez jamais.**
 - **N'écrivez jamais les chiffres en dur** (1 000 000, 30) : ils viennent de l'API (`thresholdXof`, `graceDays`).
 

@@ -456,7 +456,12 @@ class KycRequiredNotice {
         thresholdXof = _int(j['threshold_xof']),
         deadline = j['deadline'] as String?,
         blocked = j['blocked'] == true,
-        consoleUrl = (j['console_url'] as String?) ?? '';
+        consoleUrl = (j['console_url'] as String?) ?? '',
+        stage = j['stage'] as String?,
+        blockReason = j['block_reason'] as String?,
+        daysElapsed = _intOrNull(j['days_elapsed']),
+        graceDays = _intOrNull(j['grace_days']),
+        firstCollectedAt = j['first_collected_at'] as String?;
 
   /// `amount_80` (80 % du seuil), `deadline_7d` (7 jours avant l'échéance) ou `blocked`
   /// (premier refus). Valeur inconnue gardée telle quelle.
@@ -468,4 +473,21 @@ class KycRequiredNotice {
 
   /// Où le responsable du compte dépose sa pièce.
   final String consoleUrl;
+
+  // L'état du compte, comme [AccountKyc]. Tous facultatifs : `null` sur un avis plus ancien.
+
+  /// `ok` | `soon` | `blocked` | `verified` | `not_applicable` (valeur inconnue gardée telle quelle).
+  final String? stage;
+
+  /// Si bloqué : `amount` (seuil de cumul) ou `duration` (délai dépassé).
+  final String? blockReason;
+
+  /// Jours depuis le premier paiement réel encaissé.
+  final int? daysElapsed;
+
+  /// Jours accordés après le premier paiement réel encaissé.
+  final int? graceDays;
+
+  /// Date du premier paiement réel encaissé.
+  final String? firstCollectedAt;
 }

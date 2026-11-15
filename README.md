@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.5.0
+      ref: v0.5.1
 ```
 
 Sur le serveur, le secret remis par Technas va dans l'environnement :
@@ -143,7 +143,7 @@ if (kyc.applies && kyc.stage != 'ok') showBanner(kyc.collectedXof, kyc.threshold
 WebhookHandlers(onKycRequired: (e) => alertOwner(e.kycRequired!.consoleUrl)); // 80 %, J-7, premier refus
 ```
 
-Les chiffres (`thresholdXof`, `graceDays`) viennent de l'API : ne les écrivez jamais en dur. Sur `kyc_required`, proposez la carte ou expliquez au client que le paiement mobile money n'est pas disponible pour le moment ; ne réessayez jamais.
+Les chiffres (`thresholdXof`, `graceDays`) viennent de l'API : ne les écrivez jamais en dur. L'avis `account.kyc_required` porte `reason` (`amount_80`, `deadline_7d`, `blocked`), `collectedXof`, `thresholdXof`, `deadline`, `blocked`, `consoleUrl`, et l'état du compte comme `getAccountKyc()` : `stage`, `blockReason`, `daysElapsed`, `graceDays`, `firstCollectedAt` (facultatifs : `null` sur un avis plus ancien). Sur `kyc_required`, proposez la carte ou expliquez au client que le paiement mobile money n'est pas disponible pour le moment ; ne réessayez jamais.
 
 ## Paiement par carte
 
