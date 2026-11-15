@@ -1,6 +1,6 @@
 # technas_pay (Dart) : règles pour un agent de code
 
-Consignes pour un assistant de code (Codex, Claude Code…). Appliquez-les dans l'application de l'utilisateur, pas dans ce dépôt. Le README détaille chaque fonction ; un exemple shelf complet est dans [`example/`](example).
+Consignes pour un assistant de code. Appliquez-les dans l'application de l'utilisateur, pas dans ce dépôt. Le README détaille chaque fonction ; un exemple shelf complet est dans [`example/`](example).
 
 Même API, mêmes règles que le SDK TypeScript `@technas/pay` et le SDK Python : noms en camelCase comme en TypeScript.
 
@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.4.0
+      ref: v0.4.1
 ```
 
 ## Quelle méthode pour quoi
@@ -100,11 +100,11 @@ Ne réécrivez pas de routes : `technasPayShelfHandler(pay.appRoutes(authorize: 
 
 ## Paiement par carte
 
-1. **Compte carte, une fois** : au clic du RESPONSABLE, `final link = await pay.startCardOnboarding(country: 'TG', returnUrl: ..., refreshUrl: ...)`, puis redirigez-le vers `link.url` (identité et banque ; le lien expire en minutes).
+1. **Compte carte, une fois** : au clic du RESPONSABLE, `final link = await pay.startCardOnboarding(country: 'TG', returnUrl: ..., refreshUrl: ...)`, puis redirigez-le vers `link.url`, sur la page sécurisée de notre partenaire carte (Stripe), qui vous fera accepter son contrat (identité et banque ; le lien expire en minutes).
 2. **Attendez `(await pay.getCardAccount()).canAcceptPayments`** (ou `onCardAccountUpdated`). Avant, `method: 'card'` lève `card_account_not_ready` (`e.accountStatus`).
 3. **Faire payer** : `pay.askForPayment(method: 'card', amount: 12.5, currency: 'EUR', ...)`. Devise obligatoire, décimales permises.
-4. **L'argent va directement sur le compte carte**, commission Technas déjà retirée : il n'apparaît pas dans `getBalance()`. Un remboursement repart sur la carte (`refund.kind == 'stripe'`).
-5. **Tableau de bord** : `pay.getCardDashboardLink()` → https://dashboard.stripe.com/, identifiants Stripe du responsable.
+4. **L'argent va directement sur le compte carte**, commission Technas déjà retirée : il n'apparaît pas dans `getBalance()`. Un remboursement repart sur la carte (`refund.kind == 'card'`).
+5. **Tableau de bord** : `pay.getCardDashboardLink()` → le tableau de bord de votre compte carte, identifiants du responsable.
 6. **App** : `pay.appRoutes(..., card: true, authorizeAdmin: ...)`. Côté Flutter, `order: {'orderId': id, 'method': 'card'}` ; l'écran du marchand utilise `cardAccount()` et `startCardOnboarding(...)` de `TechnasPayClient`.
 
 ## La règle de relance (à respecter strictement)
@@ -176,7 +176,3 @@ Avec un secret `tps_test_`, aucun argent ne circule.
 ## Passer en réel
 
 Remplacez seulement le secret par `tps_live_…`. `returnUrl` doit être en https. Cette étape revient à l'utilisateur et à Technas : ne la faites pas de votre propre initiative.
-
-## À venir
-
-Le paiement par carte (Stripe Connect) arrive dans une prochaine version, en même temps que dans le SDK TypeScript. Ne l'inventez pas avant : la passerelle refuserait le champ.

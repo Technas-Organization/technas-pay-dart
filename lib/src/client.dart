@@ -10,7 +10,7 @@ import 'models.dart';
 import 'status.dart';
 import 'webhooks.dart';
 
-const _version = '0.4.0';
+const _version = '0.4.1';
 const defaultBaseUrl = 'https://pay-api.technas.fr';
 const secretEnv = 'TECHNAS_PAY_SECRET';
 
@@ -276,7 +276,7 @@ class TechnasPay {
   /// `canAcceptPayments` décide de tout pour `askForPayment(method: 'card')`.
   Future<CardAccount> getCardAccount() => _call('GET', '/v1/card/account', (d) => CardAccount.fromJson(d as Json));
 
-  /// https://dashboard.stripe.com/ : le responsable s'y connecte avec SES identifiants Stripe.
+  /// Le tableau de bord de votre compte carte : le responsable s'y connecte avec SES identifiants.
   Future<String> getCardDashboardLink() => _call('POST', '/v1/card/dashboard-link', (d) => (d as Json)['url'] as String, {});
 
   Future<List<Balance>> getBalance() => _call(

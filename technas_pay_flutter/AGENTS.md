@@ -1,6 +1,6 @@
 # technas_pay_flutter : règles pour un agent de code
 
-Consignes pour un assistant de code (Codex, Claude Code…). Appliquez-les dans l'application de l'utilisateur, pas dans ce dépôt. Le README détaille la configuration.
+Consignes pour un assistant de code. Appliquez-les dans l'application de l'utilisateur, pas dans ce dépôt. Le README détaille la configuration.
 
 ## Le principe, à ne jamais contourner
 

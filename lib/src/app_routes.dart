@@ -215,7 +215,7 @@ class AppRoutes<User extends Object> {
         return AppResponse(200, {
           'amount': order.amount,
           'currency': order.currency,
-          // La carte s'ouvre avec le compte carte du marchand (Stripe Connect) : à venir.
+          // La carte s'ouvre quand le compte carte du marchand est prêt.
           'methods': [
             {'method': 'mobile_money', 'available': true, 'reason': null},
             await _cardMethod(order),
