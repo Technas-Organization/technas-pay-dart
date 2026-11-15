@@ -108,6 +108,21 @@ void main() {
     expect((await ask(ref: retryReference('cmd_1', 2))).id, isNot(first.id));
   });
 
+  test('remboursement carte : `stripe` reçu est lu `card`, `card` reste `card`', () {
+    Refund lire(String kind) => Refund.fromJson({
+          'id': 're_1',
+          'payment_id': 'pay_1',
+          'payment_reference': 'cmd_1',
+          'amount': 12.5,
+          'currency': 'EUR',
+          'status': 'completed',
+          'kind': kind,
+        });
+    expect(lire('stripe').kind, 'card');
+    expect(lire('card').kind, 'card');
+    expect(lire('external').kind, 'external');
+  });
+
   test('paiement, remboursements, plafond, solde', () async {
     final p = await ask(amount: 10000);
     await expectLater(pay.refund(p.id), throwsA(isA<TechnasPayException>().having((e) => e.code, 'code', 'payment_not_refundable')));

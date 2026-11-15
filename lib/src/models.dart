@@ -206,7 +206,7 @@ class Refund {
         currency = j['currency'] as String,
         status = j['status'] as String,
         failure = j['failure'] as String?,
-        kind = (j['kind'] as String?) ?? 'payout',
+        kind = _normaliserLeGenre((j['kind'] as String?) ?? 'payout'),
         method = j['method'] as String?,
         note = j['note'] as String?,
         recordedBy = j['recorded_by'] as String?,
@@ -232,13 +232,16 @@ class Refund {
   final String status;
   final String? failure;
 
-  /// `payout` (renvoyé par Technas) | `stripe` (carte, remboursée depuis VOTRE compte carte) |
+  /// `payout` (renvoyé par Technas) | `card` (carte, remboursée depuis VOTRE compte carte) |
   /// `external` (fait hors plateforme, seulement enregistré)
   final String kind;
   final String? method;
   final String? note;
   final String? recordedBy;
   final String? createdAt;
+
+  // Transition : l'ancienne valeur `stripe` est lue comme `card`.
+  static String _normaliserLeGenre(String kind) => kind == 'stripe' ? 'card' : kind;
 }
 
 class TopUp {

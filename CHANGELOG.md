@@ -1,6 +1,11 @@
+## 0.4.1 — 2026-11-15
+
+- Remboursement par carte : `Refund.kind` vaut désormais `card` (au lieu de `stripe`). Pendant la transition, un `stripe` reçu de l'API est lu `card`.
+- Documentation : les frais de la carte s'écrivent « frais de votre compte carte » ; le tableau de bord est celui de votre compte carte. `technas_pay_flutter` 0.3.1 : textes alignés, aucun changement de code.
+
 ## 0.4.0 — 2026-11-15
 
-- Paiement par carte : `askForPayment(method: 'card', currency:)` (décimales), `startCardOnboarding`, `getCardAccount`, `getCardDashboardLink` (https://dashboard.stripe.com/), `accountStatus` sur `card_account_not_ready`, `onCardAccountUpdated`, `Payment.method`, remboursement `stripe`.
+- Paiement par carte : `askForPayment(method: 'card', currency:)` (décimales), `startCardOnboarding`, `getCardAccount`, `getCardDashboardLink`, `accountStatus` sur `card_account_not_ready`, `onCardAccountUpdated`, `Payment.method`, remboursement par carte.
 - Routes de l'app : `card: true`, `authorizeAdmin` (`GET /card/account`, `POST /card/onboarding`), `POST /payments {method: 'card'}` (références `orderId-card-N`). `toAppJson` porte `method`.
 - `technas_pay_flutter` 0.3.0 : `TechnasPaymentState.method`, `cardAccount()`, `startCardOnboarding()`. Contrat v1 : 23 cas, rejoués des deux côtés.
 
