@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.5.1
+      ref: v0.6.0
 ```
 
 ## Quelle méthode pour quoi
@@ -38,6 +38,7 @@ dependencies:
 | Savoir qu'elle est payée | webhook, `WebhookHandlers(onCompleted: ...)` |
 | Rattraper un webhook manqué | `pay.getPaymentByReference(reference)` |
 | Savoir si on peut relancer | `onExpired`, ou `canRetry((await pay.getPayment(id)).status)` |
+| Le client change d'offre ou revient plus tard | nouvel essai `retryReference(factureId, n + 1)` ; au retour, `pay.getPayment(dernierPaiementId)` d'abord |
 | Rembourser | `pay.refund(paymentId, amount:?, fees:?, reference:?)` |
 | Noter un remboursement fait hors Technas | `pay.recordExternalRefund(paymentId, amount: ..., method: 'Flooz')` |
 | Savoir que le remboursement est arrivé | `onRefund` (`refund.completed`, `refund.failed`, `refund.recorded`) |
@@ -127,6 +128,50 @@ En réel, un compte sans pièce d'identité vérifiée voit ses **nouveaux** pai
 - `failed` n'est **pas** définitif : le client peut encore payer sur la même page pendant une heure. Dans `onFailed`, n'annulez rien, n'envoyez pas de nouveau lien.
 - `expired` est définitif. `canRetry(payment.status)` n'est vrai que là.
 - Expliquez cette règle à l'utilisateur : un client relancé sur `failed` pourrait payer deux fois.
+- Le client choisit lui-même une AUTRE offre (autre montant) : c'est un nouvel essai tout de suite, voir la section suivante.
+
+## Le client change d'offre ou revient plus tard
+
+Le client choisit une offre, arrive sur la page de paiement, ne paie pas, puis revient choisir une AUTRE offre (ou revient plus tard). Ce n'est jamais « un paiement existe déjà ».
+
+- **Une référence = un essai.** Nouvelle offre, ou retour après expiration : un NOUVEL essai, avec une nouvelle référence `retryReference(factureId, n + 1)` (`n` gardé en base). Réutiliser la référence avec un autre montant lève `reference_conflict` (409) ; celle d'un essai expiré, `payment_expired` (409). Les routes toutes faites (`appRoutes`) le font seules.
+- **Une facture n'est payée QUE sur `payment.completed`** (avis signé, `onCompleted`). Jamais sur `returnUrl`, jamais à l'ouverture de la page.
+- **Un essai non payé ne bloque jamais un nouvel essai.** `pending` ou `failed` et le client change d'offre : créez le nouvel essai, ne refusez pas. `expired` : marquez la tentative expirée et laissez recommencer.
+- **Au retour du client**, vérifiez avec `pay.getPayment(dernierPaiementId)` avant de dire quoi que ce soit ; ne vous fiez jamais seulement à votre base. Dans l'app Flutter : `technasPay.readPayment(id)` (route `GET /payments/{id}`).
+- **Un ancien essai payé APRÈS le nouveau** (le client a payé les deux pages) : n'activez rien deux fois ; remboursez l'essai en trop avec `pay.refund(paymentId)`.
+
+```dart
+/// Au clic « payer » : [montant] est celui de l'offre choisie MAINTENANT.
+Future<String?> payer(Facture facture, int montant) async {
+  final dernierId = facture.dernierPaiementId;
+  if (dernierId != null) {
+    final dernier = await pay.getPayment(dernierId); // la vérité est chez Technas
+    if (dernier.status == 'completed') return null; // déjà payée
+  }
+  // pending, failed, expired ou autre montant : nouvel essai, jamais un refus
+  facture.essai += 1;
+  final paiement = await pay.askForPayment(
+    amount: montant,
+    reference: retryReference(facture.id, facture.essai),
+    customer: {'email': facture.email, 'name': facture.nom},
+    returnUrl: 'https://votre-site.example/merci',
+  );
+  facture.dernierPaiementId = paiement.id;
+  await facture.save();
+  return paiement.checkoutUrl;
+}
+
+final handlers = WebhookHandlers(onCompleted: (event) async {
+  final p = event.payment!;
+  final facture = await Facture.get(p.reference.substring(0, p.reference.lastIndexOf('-')));
+  if (facture.payeePar != null && facture.payeePar != p.id) {
+    await pay.refund(p.id); // le client a payé deux pages : on rend l'essai en trop
+    return;
+  }
+  facture.payeePar = p.id; // payée ici, et seulement ici
+  await facture.save();
+});
+```
 
 ## Webhooks
 
