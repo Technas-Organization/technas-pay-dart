@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.5.1
+      ref: v0.6.0
 ```
 
 Sur le serveur, le secret remis par Technas va dans l'environnement :
@@ -157,6 +157,41 @@ Les chiffres (`thresholdXof`, `graceDays`) viennent de l'API : ne les écrivez j
 ## La règle de relance
 
 **Une référence = un essai.** `failed` n'est pas définitif : le client peut encore payer sur la même page pendant une heure. Ne relancez qu'après `payment.expired`, avec `retryReference(orderId, attempt + 1)`.
+
+Le client change d'offre ou revient plus tard : c'est un NOUVEL essai (`retryReference(factureId, n + 1)`), jamais un refus, même si l'essai précédent est encore `pending` ou `failed`. Réutiliser une référence avec un autre montant lève `reference_conflict` ; les routes toutes faites passent seules à l'essai suivant. Au retour du client, relisez le dernier essai (`getPayment`) avant de dire quoi que ce soit. La facture n'est payée que sur `payment.completed` ; si le client a payé deux pages, remboursez l'essai en trop (`refund`).
+
+```dart
+/// Au clic « payer » : [montant] est celui de l'offre choisie MAINTENANT.
+Future<String?> payer(Facture facture, int montant) async {
+  final dernierId = facture.dernierPaiementId;
+  if (dernierId != null) {
+    final dernier = await pay.getPayment(dernierId); // la vérité est chez Technas
+    if (dernier.status == 'completed') return null; // déjà payée
+  }
+  // pending, failed, expired ou autre montant : nouvel essai, jamais un refus
+  facture.essai += 1;
+  final paiement = await pay.askForPayment(
+    amount: montant,
+    reference: retryReference(facture.id, facture.essai),
+    customer: {'email': facture.email, 'name': facture.nom},
+    returnUrl: 'https://votre-site.example/merci',
+  );
+  facture.dernierPaiementId = paiement.id;
+  await facture.save();
+  return paiement.checkoutUrl;
+}
+
+final handlers = WebhookHandlers(onCompleted: (event) async {
+  final p = event.payment!;
+  final facture = await Facture.get(p.reference.substring(0, p.reference.lastIndexOf('-')));
+  if (facture.payeePar != null && facture.payeePar != p.id) {
+    await pay.refund(p.id); // le client a payé deux pages : on rend l'essai en trop
+    return;
+  }
+  facture.payeePar = p.id; // payée ici, et seulement ici
+  await facture.save();
+});
+```
 
 ## Développer
 

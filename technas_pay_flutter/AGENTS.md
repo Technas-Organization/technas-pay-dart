@@ -23,6 +23,8 @@ Consignes pour un assistant de code. Appliquez-les dans l'application de l'utili
 - **L'app n'envoie jamais le montant**, seulement l'identifiant de la commande. Le backend le relit.
 - **Seul le statut relu auprès du backend prouve le paiement**, jamais le retour du navigateur ni l'ouverture de `returnUrl`.
 - **`failed` n'est pas définitif.** Ne proposez jamais un nouveau paiement sur `failed` : le client pourrait payer deux fois. « Payer à nouveau » n'existe qu'après `expired`, et c'est le backend qui crée le nouvel essai.
+- **Au retour du client** (lien de retour, app rouverte, plus tard), relisez le paiement par la route `GET /payments/{id}` (`technasPay.readPayment(id)`, que `showTechnasPayment` appelle seul) avant d'afficher quoi que ce soit. Ni l'état gardé dans l'app, ni le retour du navigateur ne disent qu'une commande est payée.
+- **Le client change d'offre = un nouvel appel de démarrage** (`showTechnasPayment` / `startPayment` avec l'`orderId` de la commande, que le backend relit au nouveau montant), jamais un refus du type « un paiement existe déjà ». Le serveur passe seul à l'essai suivant.
 - **N'ouvrez que des pages Technas.** Le SDK refuse tout autre lien (`isTechnasCheckoutUrl`). N'ajoutez pas d'hôte à `trustedHosts` sans l'accord de Technas.
 - **Biens numériques dans une app iOS ou Android** (abonnement, crédits, contenu débloqué) : le store est obligatoire (Apple 3.1.1, Google Play Billing). N'utilisez Technas Pay dans l'app que pour des **biens et services réels** (livraison, prestation, réservation). Sur le web, tout est permis. En cas de doute, demandez à l'utilisateur ce qu'il vend.
 - **Ne baissez pas le rythme de relecture sous 2 s** : chaque relecture appelle le backend.

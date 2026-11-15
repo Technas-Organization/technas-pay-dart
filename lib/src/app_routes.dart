@@ -163,8 +163,9 @@ class AppRoutes<User extends Object> {
   }
 
   Future<Payment> _start(String orderId, AppOrder order, String method) async {
-    // Une référence = un essai : `orderId-1`, `-2`… Un essai expiré lève payment_expired, on passe
-    // au suivant. Un essai en cours (ou payé) est rendu tel quel : jamais deux paiements.
+    // Une référence = un essai : `orderId-1`, `-2`… Un essai expiré (payment_expired) ou d'un autre
+    // montant (reference_conflict : le client a changé d'offre) est sauté : essai suivant, jamais un
+    // refus. Un essai en cours (ou payé) au même montant est rendu tel quel.
     for (var attempt = 1;; attempt++) {
       try {
         return await _pay.askForPayment(
@@ -179,7 +180,7 @@ class AppRoutes<User extends Object> {
           metadata: {...order.metadata, 'order_id': orderId},
         );
       } on TechnasPayException catch (e) {
-        if (e.code == 'payment_expired' && attempt < maxAttempts) continue;
+        if ((e.code == 'payment_expired' || e.code == 'reference_conflict') && attempt < maxAttempts) continue;
         rethrow;
       }
     }

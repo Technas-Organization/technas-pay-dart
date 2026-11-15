@@ -51,7 +51,7 @@ C'est tout. L'app ouvre la page Technas, relit le statut, gère le refus, l'expi
 | Python Flask / Django | `.flask_blueprint()` / `path("api/technas-pay/<path:rest>", routes.django_view())` |
 | Dart shelf / Dart Frog | `technasPayShelfHandler(pay.appRoutes(...))` monté sur `/api/technas-pay/` (`package:technas_pay/shelf.dart`) |
 
-Routes : `GET /methods?orderId=`, `POST /payments` `{orderId}`, `GET /payments/{id}`, `POST /webhook`. La dernière est l'adresse de webhook à déclarer à Technas. Les essais expirés sont sautés tout seuls (`42-1`, `42-2`…) : rien à stocker côté serveur. Le contrat [`contract/app-contract.v1.json`](../contract/app-contract.v1.json) est rejoué par ce client et par chaque SDK serveur.
+Routes : `GET /methods?orderId=`, `POST /payments` `{orderId}`, `GET /payments/{id}`, `POST /webhook`. La dernière est l'adresse de webhook à déclarer à Technas. Les essais expirés, ou d'un autre montant (le client a changé d'offre), sont sautés tout seuls (`42-1`, `42-2`…) : rien à stocker côté serveur. Le contrat [`contract/app-contract.v1.json`](../contract/app-contract.v1.json) est rejoué par ce client et par chaque SDK serveur.
 
 `technasPay.methods(orderId)` rend les moyens ouverts pour une commande. La carte s'y ouvre quand le serveur monte les routes avec `card: true` et que le compte carte du marchand est prêt. Payer par carte : `order: {'orderId': id, 'method': 'card'}`. L'écran du marchand (jamais celui d'un client) dispose de `cardAccount()` et `startCardOnboarding(...)`.
 
@@ -100,6 +100,17 @@ Couleurs et typographie viennent de `Theme.of(context)`. Le SDK n'écrit aucune 
 - **Biens numériques** (abonnement, crédits, contenu débloqué) vendus **dans une app iOS ou Android** : le store est obligatoire (règle Apple 3.1.1, Google Play Billing). Technas Pay sert aux **biens et services réels** (commande livrée, prestation, réservation), partout, et à tout sur le web.
 - **`failed` n'est pas définitif** : la même page peut encore réussir pendant une heure. Le SDK ne propose jamais « Payer à nouveau » sur un refus, seulement après `expired`. C'est alors votre backend qui crée un nouvel essai, avec une nouvelle référence.
 - **L'app n'envoie jamais le montant.** Votre backend le relit en base.
+- **Au retour du client, relisez avant d'afficher.** Lien de retour, app rouverte ou retour des jours plus tard : relisez le paiement par la route `GET /payments/{id}` avant d'afficher quoi que ce soit (`showTechnasPayment` le fait seul).
+- **Le client change d'offre = un nouvel appel de démarrage, jamais un refus.** Le backend relit la commande au nouveau montant et crée l'essai suivant tout seul.
+
+```dart
+// Au retour du client : la vérité vient du backend, jamais de l'état gardé dans l'app.
+final etat = await technasPay.readPayment(dernierPaiementId); // GET /payments/{id}
+if (etat.isPaid) return afficherPayee();
+
+// Il a choisi une autre offre : la commande porte le nouveau montant en base, on redémarre.
+final result = await showTechnasPayment(context, backend: technasPay, order: {'orderId': commande.id});
+```
 
 ## Développer
 

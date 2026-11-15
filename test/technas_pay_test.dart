@@ -211,6 +211,30 @@ void main() {
     expect((await ask(ref: retryReference('cmd_1', 2))).id, isNot(first.id));
   });
 
+  test('le client change d\'offre ou revient plus tard : nouvel essai, jamais un refus', () async {
+    final first = await ask(ref: retryReference('F', 1), amount: 5000);
+    await pay.simulateTestPayment(first.id, 'expired');
+    expect((await pay.getPayment(first.id)).status, 'expired');
+    final second = await ask(ref: retryReference('F', 2), amount: 7500);
+    expect(second.id, isNot(first.id));
+    expect(second.status, 'pending');
+    final sent = gw.requests
+        .where((r) => r.method == 'POST' && r.url.path == '/v1/payments')
+        .map((r) => jsonDecode(r.body) as Map)
+        .map((b) => [b['reference'], b['amount']])
+        .toList();
+    expect(sent, [
+      ['F-1', 5000],
+      ['F-2', 7500],
+    ]);
+    await expectLater(
+        ask(ref: 'F-1', amount: 7500),
+        throwsA(isA<TechnasPayException>()
+            .having((e) => e.code, 'code', 'reference_conflict')
+            .having((e) => e.status, 'status', 409)
+            .having((e) => e.retryable, 'retryable', isFalse)));
+  });
+
   test('remboursement carte : `stripe` reçu est lu `card`, `card` reste `card`', () {
     Refund lire(String kind) => Refund.fromJson({
           'id': 're_1',

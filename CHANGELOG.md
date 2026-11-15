@@ -1,3 +1,9 @@
+## 0.6.0 — 2026-11-15
+
+- Le client change d'offre ou revient plus tard. Routes toutes faites (`appRoutes`) : un `reference_conflict` (la référence d'un essai existe avec un autre montant : le client a changé d'offre) fait passer à l'essai suivant, comme `payment_expired`, dans la même borne `maxAttempts` : jamais un refus. Contrat v1 : 24 cas.
+- Documentation : section « Le client change d'offre ou revient plus tard » (AGENTS.md, README, llms.txt) avec un exemple Dart ; test de scénario (essai expiré, puis nouvel essai d'un autre montant).
+- `technas_pay_flutter` 0.3.2 : rejoue le contrat à 24 cas, aucun changement de code. Documentation : au retour du client, relire le paiement (`GET /payments/{id}`) avant d'afficher quoi que ce soit ; un changement d'offre est un nouvel appel de démarrage, jamais un refus.
+
 ## 0.5.1 — 2026-11-15
 
 - Avis `account.kyc_required` : `KycRequiredNotice` porte aussi l'état du compte, comme `getAccountKyc()` : `stage`, `blockReason` (`amount` | `duration`), `daysElapsed`, `graceDays`, `firstCollectedAt`. Tous facultatifs (`null` sur un avis plus ancien). `reason` ne change pas de sens. `technas_pay_flutter` inchangé.

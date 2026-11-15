@@ -46,8 +46,8 @@ class FakeGateway {
     if (r.method == 'POST' && path == '/v1/payments') {
       final existing = payments.values.where((p) => p['reference'] == body!['reference']).firstOrNull;
       if (existing != null) {
-        if (existing['status'] == 'expired') return _err(409, 'payment_expired');
         if (existing['amount'] != body!['amount']) return _err(409, 'reference_conflict');
+        if (existing['status'] == 'expired') return _err(409, 'payment_expired');
         return _ok(existing);
       }
       final id = 'pay_${payments.length + 1}';
