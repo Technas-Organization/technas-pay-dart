@@ -375,3 +375,97 @@ class CardOnboardingLink {
   final String? expiresAt;
   final CardAccount account;
 }
+
+int _int(Object? v) => v is num ? v.toInt() : 0;
+int? _intOrNull(Object? v) => v is num ? v.toInt() : null;
+
+/// Le seuil d'identité de votre compte (`getAccountKyc()`). En réel, sans pièce d'identité
+/// vérifiée, les NOUVEAUX paiements mobile money sont refusés (`kyc_required`) au-delà de
+/// [thresholdXof] encaissés ou [graceDays] jours après le premier paiement réel encaissé.
+/// Les chiffres viennent d'ici : ne les écrivez jamais en dur.
+///
+/// À montrer au MARCHAND (pas au client final). Une valeur inconnue de [stage], [level] ou
+/// [reason] est gardée telle quelle.
+class AccountKyc {
+  AccountKyc.fromJson(Json j)
+      : applies = j['applies'] == true,
+        stage = (j['stage'] as String?) ?? 'not_applicable',
+        level = (j['level'] as String?) ?? 'none',
+        daysElapsed = _intOrNull(j['days_elapsed']),
+        warnFromXof = _int(j['warn_from_xof']),
+        warnFromDate = j['warn_from_date'] as String?,
+        collectedXof = _int(j['collected_xof']),
+        thresholdXof = _int(j['threshold_xof']),
+        graceDays = _int(j['grace_days']),
+        firstCollectedAt = j['first_collected_at'] as String?,
+        deadline = j['deadline'] as String?,
+        waiverUntil = j['waiver_until'] as String?,
+        blocked = j['blocked'] == true,
+        reason = j['reason'] as String?,
+        consoleUrl = (j['console_url'] as String?) ?? '';
+
+  /// Faux : le seuil ne vous concerne pas (compte de test, déjà vérifié…).
+  final bool applies;
+
+  /// `ok` | `soon` | `blocked` | `verified` | `not_applicable`.
+  final String stage;
+
+  /// Pièce vérifiée : `none` | `identity` | `business`.
+  final String level;
+
+  /// Jours depuis le premier paiement réel encaissé (`null` : aucun).
+  final int? daysElapsed;
+
+  /// Montant (F CFA) à partir duquel `stage` passe à `soon`.
+  final int warnFromXof;
+
+  /// Date à partir de laquelle `stage` passe à `soon`.
+  final String? warnFromDate;
+
+  /// Cumul encaissé en réel, en F CFA.
+  final int collectedXof;
+
+  /// Seuil de cumul, en F CFA.
+  final int thresholdXof;
+
+  /// Jours accordés après le premier paiement réel encaissé.
+  final int graceDays;
+  final String? firstCollectedAt;
+
+  /// Date au-delà de laquelle les nouveaux paiements mobile money sont refusés.
+  final String? deadline;
+
+  /// Délai supplémentaire accordé par Technas, jusqu'à cette date.
+  final String? waiverUntil;
+
+  /// Vrai : les NOUVEAUX paiements mobile money sont refusés (`kyc_required`).
+  final bool blocked;
+
+  /// Si [blocked] : `amount` (seuil de cumul) ou `duration` (délai dépassé).
+  final String? reason;
+
+  /// Où le responsable du compte dépose sa pièce.
+  final String consoleUrl;
+}
+
+/// Contenu de l'avis `account.kyc_required` : prévenez le RESPONSABLE du compte.
+class KycRequiredNotice {
+  KycRequiredNotice.fromJson(Json j)
+      : reason = (j['reason'] as String?) ?? '',
+        collectedXof = _int(j['collected_xof']),
+        thresholdXof = _int(j['threshold_xof']),
+        deadline = j['deadline'] as String?,
+        blocked = j['blocked'] == true,
+        consoleUrl = (j['console_url'] as String?) ?? '';
+
+  /// `amount_80` (80 % du seuil), `deadline_7d` (7 jours avant l'échéance) ou `blocked`
+  /// (premier refus). Valeur inconnue gardée telle quelle.
+  final String reason;
+  final int collectedXof;
+  final int thresholdXof;
+  final String? deadline;
+  final bool blocked;
+
+  /// Où le responsable du compte dépose sa pièce.
+  final String consoleUrl;
+}

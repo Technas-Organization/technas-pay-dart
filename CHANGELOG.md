@@ -1,3 +1,10 @@
+## 0.5.0 — 2026-11-15
+
+- Seuil d'identité : `getAccountKyc()` (`GET /v1/account/kyc`) rend un `AccountKyc` typé (étape, cumul, seuil, échéance, `consoleUrl`). Valeurs inconnues de `stage`, `level`, `reason` gardées telles quelles.
+- Avis `account.kyc_required` : `WebhookHandlers(onKycRequired:)`, contenu typé `event.kycRequired` (`KycRequiredNotice`).
+- Erreurs `kyc_required` et `contract_required` (409, non rejouables) : `TechnasPayException.consoleUrl` et `.version`. Les précisions sont lues au premier niveau ou dans `details`.
+- README et AGENTS.md : section « Seuil d'identité ». `technas_pay_flutter` inchangé (0.3.1) : le code `kyc_required` lui arrive tel quel par les routes de l'app.
+
 ## 0.4.1 — 2026-11-15
 
 - Remboursement par carte : `Refund.kind` vaut désormais `card` (au lieu de `stripe`). Pendant la transition, un `stripe` reçu de l'API est lu `card`.

@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.4.1
+      ref: v0.5.0
 ```
 
 Sur le serveur, le secret remis par Technas va dans l'environnement :
@@ -122,6 +122,7 @@ Côté serveur, renvoyez `payment.toAppJson()` : c'est le contrat qu'il lit.
 | `getRefund(id)` | Statut d'un remboursement |
 | `topUpBalance(amount:, currency:, returnUrl:?)` | Recharger le solde |
 | `getBalance()`, `getSettlements()` | Solde par devise, reversements |
+| `getAccountKyc()` | Seuil d'identité : cumul, échéance, lien de la console |
 | `getFxMode()`, `setFxMode(mode:, acceptRisk:, markupPct:?)` | Clients hors zone franc CFA (option à risque) |
 | `setCountryRules(allowed:?, excluded:)` | Où vous vendez |
 | `getPayoutNetworks(country)`, `getPayoutDestination()`, `setPayoutDestination(...)` | Numéro de reversement |
@@ -129,7 +130,20 @@ Côté serveur, renvoyez `payment.toAppJson()` : c'est le contrat qu'il lit.
 | `createTestWebhook(type, reference:, amount:, currency:)` | Webhook signé pour vos tests |
 | `simulateTestPayment(id, 'completed'\|'failed'\|'expired')` | Jouer le payeur en test |
 
-Erreurs : `TechnasPayException` avec `code` (à tester), `retryable`, et selon le code `missingAmount`, `refundableAmount`, `reason`, `risk`. Liste et conduite à tenir : [AGENTS.md](AGENTS.md#erreurs).
+Erreurs : `TechnasPayException` avec `code` (à tester), `retryable`, et selon le code `missingAmount`, `refundableAmount`, `reason`, `risk`, `accountStatus`, `consoleUrl`, `version`. `kyc_required` (409, `consoleUrl`, `reason` : `amount` | `duration`) et `contract_required` (409, `consoleUrl`, `version` du contrat à accepter dans la console) ne se réessaient jamais. Liste et conduite à tenir : [AGENTS.md](AGENTS.md#erreurs).
+
+## Seuil d'identité
+
+En réel, un compte sans pièce d'identité vérifiée voit ses **nouveaux** paiements mobile money refusés (`kyc_required`) au-delà de 1 000 000 F CFA encaissés en cumul, ou 30 jours après son premier paiement réel encaissé. Rien de ce qui existe n'est bloqué : paiement en cours, remboursement, reversement, lecture. La carte n'est pas concernée. Le responsable du compte dépose sa pièce dans la console (`consoleUrl`).
+
+```dart
+final kyc = await pay.getAccountKyc();          // à montrer au marchand, pas au client final
+if (kyc.applies && kyc.stage != 'ok') showBanner(kyc.collectedXof, kyc.thresholdXof, kyc.deadline, kyc.consoleUrl);
+
+WebhookHandlers(onKycRequired: (e) => alertOwner(e.kycRequired!.consoleUrl)); // 80 %, J-7, premier refus
+```
+
+Les chiffres (`thresholdXof`, `graceDays`) viennent de l'API : ne les écrivez jamais en dur. Sur `kyc_required`, proposez la carte ou expliquez au client que le paiement mobile money n'est pas disponible pour le moment ; ne réessayez jamais.
 
 ## Paiement par carte
 

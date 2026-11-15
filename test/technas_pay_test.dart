@@ -79,6 +79,109 @@ void main() {
     expect(seen.last['country'], 'FR');
   });
 
+  test('seuil d\'identité : GET /v1/account/kyc, clé en en-tête, tous les champs décodés', () async {
+    final seen = <http.Request>[];
+    Map<String, Object?> body = {
+      'applies': true,
+      'stage': 'soon',
+      'level': 'none',
+      'days_elapsed': 24,
+      'warn_from_xof': 800000,
+      'warn_from_date': '2026-12-01T00:00:00Z',
+      'collected_xof': 820000,
+      'threshold_xof': 1000000,
+      'grace_days': 30,
+      'first_collected_at': '2026-11-08T10:00:00Z',
+      'deadline': '2026-12-08T10:00:00Z',
+      'waiver_until': '2026-12-20T00:00:00Z',
+      'blocked': false,
+      'reason': null,
+      'console_url': 'https://pay.technas.fr/console/identite',
+    };
+    final kyc = TechnasPay(
+      secret: secret,
+      baseUrl: base,
+      httpClient: MockClient((r) async {
+        seen.add(r);
+        return http.Response(jsonEncode(body), 200);
+      }),
+    );
+    final k = await kyc.getAccountKyc();
+    expect(seen.single.method, 'GET');
+    expect(seen.single.url.toString(), '$base/v1/account/kyc');
+    expect(seen.single.headers['Authorization'], 'Bearer $apiKey');
+    expect(k.applies, isTrue);
+    expect(k.stage, 'soon');
+    expect(k.level, 'none');
+    expect(k.daysElapsed, 24);
+    expect(k.warnFromXof, 800000);
+    expect(k.warnFromDate, '2026-12-01T00:00:00Z');
+    expect(k.collectedXof, 820000);
+    expect(k.thresholdXof, 1000000);
+    expect(k.graceDays, 30);
+    expect(k.firstCollectedAt, '2026-11-08T10:00:00Z');
+    expect(k.deadline, '2026-12-08T10:00:00Z');
+    expect(k.waiverUntil, '2026-12-20T00:00:00Z');
+    expect(k.blocked, isFalse);
+    expect(k.reason, isNull);
+    expect(k.consoleUrl, 'https://pay.technas.fr/console/identite');
+
+    // Champs nuls et valeurs inconnues : gardés tels quels, jamais d'exception.
+    body = {
+      ...body,
+      'applies': false,
+      'stage': 'nouvelle_etape',
+      'level': 'autre_niveau',
+      'days_elapsed': null,
+      'warn_from_date': null,
+      'first_collected_at': null,
+      'deadline': null,
+      'waiver_until': null,
+      'blocked': true,
+      'reason': 'autre_raison',
+    };
+    final n = await kyc.getAccountKyc();
+    expect(n.applies, isFalse);
+    expect(n.stage, 'nouvelle_etape');
+    expect(n.level, 'autre_niveau');
+    expect(n.daysElapsed, isNull);
+    expect(n.warnFromDate, isNull);
+    expect(n.firstCollectedAt, isNull);
+    expect(n.deadline, isNull);
+    expect(n.waiverUntil, isNull);
+    expect(n.blocked, isTrue);
+    expect(n.reason, 'autre_raison');
+  });
+
+  test('409 kyc_required et contract_required : précisions lues, jamais rejouables', () async {
+    var reply = {
+      'code': 'kyc_required',
+      'message': 'm',
+      'details': {'console_url': 'https://pay.technas.fr/console/identite', 'reason': 'duration'},
+    };
+    final p = TechnasPay(secret: secret, baseUrl: base, httpClient: MockClient((_) async => http.Response(jsonEncode(reply), 409)));
+    await expectLater(
+        p.askForPayment(amount: 5000, reference: 'k-1', customer: customer, returnUrl: 'https://p'),
+        throwsA(isA<TechnasPayException>()
+            .having((e) => e.code, 'code', 'kyc_required')
+            .having((e) => e.status, 'status', 409)
+            .having((e) => e.consoleUrl, 'consoleUrl', 'https://pay.technas.fr/console/identite')
+            .having((e) => e.reason, 'reason', 'duration')
+            .having((e) => e.retryable, 'retryable', isFalse)));
+    reply = {
+      'code': 'contract_required',
+      'message': 'm',
+      'details': {'console_url': 'https://pay.technas.fr/console/contrat', 'version': '2026-11'},
+    };
+    await expectLater(
+        p.askForPayment(amount: 5000, reference: 'k-2', customer: customer, returnUrl: 'https://p'),
+        throwsA(isA<TechnasPayException>()
+            .having((e) => e.code, 'code', 'contract_required')
+            .having((e) => e.consoleUrl, 'consoleUrl', 'https://pay.technas.fr/console/contrat')
+            .having((e) => e.version, 'version', '2026-11')
+            .having((e) => e.retryable, 'retryable', isFalse)));
+  });
+
   test('la devise suit le pays CFA, jamais hors zone', () async {
     await ask(ref: 'r-cm', c: {...customer, 'country': 'cm'});
     expect((jsonDecode(gw.requests.last.body) as Map)['currency'], 'XAF');
@@ -272,6 +375,35 @@ void main() {
         expect((await pay.handleWebhook(body, sign(body, webhookSecret), h)).status, 200);
       }
       expect(seen, ['refund:failed', 'dest:active', 'topup:5', 'fx:none', 'expired:r-1', 'conv:441']);
+    });
+
+    test('account.kyc_required signé : onKycRequired, contenu typé', () async {
+      final body = jsonEncode({
+        'id': 'evt_kyc',
+        'type': 'account.kyc_required',
+        'created_at': 'x',
+        'data': {
+          'reason': 'amount_80',
+          'collected_xof': 810000,
+          'threshold_xof': 1000000,
+          'deadline': '2026-12-08T10:00:00Z',
+          'blocked': false,
+          'console_url': 'https://pay.technas.fr/console/identite',
+        },
+      });
+      TechnasPayEvent? got;
+      final r = await pay.handleWebhook(
+          body, sign(body, webhookSecret), WebhookHandlers(onKycRequired: (e) => got = e, onCompleted: (_) => fail('appelée')));
+      expect(r.status, 200);
+      final k = got!.kycRequired!;
+      expect(got!.type, 'account.kyc_required');
+      expect(k.reason, 'amount_80');
+      expect(k.collectedXof, 810000);
+      expect(k.thresholdXof, 1000000);
+      expect(k.deadline, '2026-12-08T10:00:00Z');
+      expect(k.blocked, isFalse);
+      expect(k.consoleUrl, 'https://pay.technas.fr/console/identite');
+      expect(got!.payment, isNull);
     });
 
     test('createTestWebhook passe la vérification', () async {

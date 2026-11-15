@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.4.1
+      ref: v0.5.0
 ```
 
 ## Quelle méthode pour quoi
@@ -44,6 +44,7 @@ dependencies:
 | Recharger le solde | `pay.topUpBalance(amount: ..., currency: 'XOF')`, ouvrir `checkoutUrl` ; `onTopUp` |
 | Solde, reversements | `pay.getBalance()`, `pay.getSettlements()` |
 | Historique | `pay.listTransactions(limit:, status:, cursor:)` |
+| Seuil d'identité (à montrer au marchand) | `pay.getAccountKyc()` ; avis `onKycRequired` |
 | Pays hors zone CFA ouverts, risques | `pay.getFxMode()` |
 | Activer une option hors zone (après accord explicite) | `pay.setFxMode(mode: 'local', acceptRisk: true)` |
 | Pays où vendre | `pay.setCountryRules(allowed:?, excluded:)` ou `allowedCountries` / `excludedCountries` par paiement |
@@ -107,6 +108,15 @@ Ne réécrivez pas de routes : `technasPayShelfHandler(pay.appRoutes(authorize: 
 5. **Tableau de bord** : `pay.getCardDashboardLink()` → le tableau de bord de votre compte carte, identifiants du responsable.
 6. **App** : `pay.appRoutes(..., card: true, authorizeAdmin: ...)`. Côté Flutter, `order: {'orderId': id, 'method': 'card'}` ; l'écran du marchand utilise `cardAccount()` et `startCardOnboarding(...)` de `TechnasPayClient`.
 
+## Seuil d'identité
+
+En réel, un compte sans pièce d'identité vérifiée voit ses **nouveaux** paiements mobile money refusés (`kyc_required`) au-delà de 1 000 000 F CFA encaissés en cumul, ou 30 jours après son premier paiement réel encaissé. Rien de ce qui existe n'est bloqué (paiement en cours, remboursement, reversement, lecture). La carte n'est pas concernée. Le responsable du compte dépose sa pièce dans la console (`consoleUrl`).
+
+- **Lisez `pay.getAccountKyc()`** pour afficher l'état au **marchand** (tableau de bord, écran d'administration), jamais au client final : `stage` (`ok`, `soon`, `blocked`, `verified`, `not_applicable`), `collectedXof` / `thresholdXof`, `deadline`, `consoleUrl`. Une valeur inconnue de `stage`, `level` ou `reason` est gardée telle quelle : traitez-la comme « à vérifier dans la console ».
+- **Branchez `onKycRequired`** (avis `account.kyc_required`, envoyé à 80 % du seuil, 7 jours avant l'échéance, puis au premier refus) : prévenez le responsable avec `event.kycRequired!.consoleUrl`.
+- **Sur `kyc_required`** : proposez la carte si elle est ouverte, sinon expliquez au client que le paiement mobile money n'est pas disponible pour le moment. **Ne réessayez jamais.**
+- **N'écrivez jamais les chiffres en dur** (1 000 000, 30) : ils viennent de l'API (`thresholdXof`, `graceDays`).
+
 ## La règle de relance (à respecter strictement)
 
 **Une référence = un essai. Relancez avec une NOUVELLE référence seulement après `payment.expired` (ou `get_payment` → `expired`), jamais sur `failed`.**
@@ -135,7 +145,7 @@ Ne réécrivez pas de routes : `technasPayShelfHandler(pay.appRoutes(authorize: 
 
 ## Erreurs
 
-Attrapez `TechnasPayException` (`on TechnasPayException catch (e)`) et testez `e.code` (jamais le message). `e.retryable` vrai : refaites **le même appel**, mêmes valeurs. Selon le code : `e.missingAmount`, `e.refundableAmount`, `e.reason`, `e.risk`.
+Attrapez `TechnasPayException` (`on TechnasPayException catch (e)`) et testez `e.code` (jamais le message). `e.retryable` vrai : refaites **le même appel**, mêmes valeurs. Selon le code : `e.missingAmount`, `e.refundableAmount`, `e.reason`, `e.risk`, `e.accountStatus`, `e.consoleUrl`, `e.version`.
 
 | `error.code` | Que faire |
 |---|---|
@@ -162,6 +172,8 @@ Attrapez `TechnasPayException` (`on TechnasPayException catch (e)`) et testez `e
 | `provider_unavailable`, `unavailable`, `network_error` | Panne passagère : refaire le même appel |
 | `rate_limited` | Ralentir, réessayer |
 | `test_only` | Fonction de test appelée avec un secret réel |
+| `kyc_required` (409) | Seuil d'identité atteint (`e.reason` : `amount` ou `duration`) : proposer la carte ou expliquer au client que le mobile money n'est pas disponible pour le moment, prévenir le responsable (`e.consoleUrl`). Jamais réessayer |
+| `contract_required` (409) | Le responsable doit accepter le contrat `e.version` dans la console (`e.consoleUrl`). Jamais réessayer |
 
 ## Vérifier l'intégration
 
