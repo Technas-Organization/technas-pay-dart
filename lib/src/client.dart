@@ -10,7 +10,7 @@ import 'models.dart';
 import 'status.dart';
 import 'webhooks.dart';
 
-const _version = '0.4.1';
+const _version = '0.5.0';
 const defaultBaseUrl = 'https://pay-api.technas.fr';
 const secretEnv = 'TECHNAS_PAY_SECRET';
 
@@ -278,6 +278,10 @@ class TechnasPay {
 
   /// Le tableau de bord de votre compte carte : le responsable s'y connecte avec SES identifiants.
   Future<String> getCardDashboardLink() => _call('POST', '/v1/card/dashboard-link', (d) => (d as Json)['url'] as String, {});
+
+  /// Le seuil d'identité de votre compte : où vous en êtes, l'échéance, le lien de la console.
+  /// À montrer au marchand. Même clé que `getBalance()`.
+  Future<AccountKyc> getAccountKyc() => _call('GET', '/v1/account/kyc', (d) => AccountKyc.fromJson(d as Json));
 
   Future<List<Balance>> getBalance() => _call(
       'GET', '/v1/balance', (d) => ((d as List?) ?? const []).map((r) => Balance(r['currency'] as String, r['amount'] as num)).toList());
