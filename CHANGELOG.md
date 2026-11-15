@@ -1,3 +1,7 @@
+## 0.5.1 — 2026-11-15
+
+- Avis `account.kyc_required` : `KycRequiredNotice` porte aussi l'état du compte, comme `getAccountKyc()` : `stage`, `blockReason` (`amount` | `duration`), `daysElapsed`, `graceDays`, `firstCollectedAt`. Tous facultatifs (`null` sur un avis plus ancien). `reason` ne change pas de sens. `technas_pay_flutter` inchangé.
+
 ## 0.5.0 — 2026-11-15
 
 - Seuil d'identité : `getAccountKyc()` (`GET /v1/account/kyc`) rend un `AccountKyc` typé (étape, cumul, seuil, échéance, `consoleUrl`). Valeurs inconnues de `stage`, `level`, `reason` gardées telles quelles.
