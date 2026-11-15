@@ -2,11 +2,11 @@
 
 Encaissez des paiements mobile money et par carte via Technas depuis un serveur Dart (shelf, Dart Frog, serverpod), et ouvrez la page de paiement depuis une app Flutter **sans jamais y mettre de clé**.
 
-**Technas Pay réunit le mobile money et la carte dans un seul SDK, du serveur jusqu'à l'app Flutter.** Carte : 1 % (plus les frais Stripe de votre compte). Mobile money : 2 % (les frais de l'opérateur sont payés par le client). Sans abonnement, et une clé de test sans papier pour commencer.
+**Technas Pay réunit le mobile money et la carte dans un seul SDK, du serveur jusqu'à l'app Flutter.** Carte : 1 % (plus les frais de votre compte carte). Mobile money : 2 % (les frais de l'opérateur sont payés par le client). Sans abonnement, et une clé de test sans papier pour commencer.
 
 Devises et pays, pièces demandées, versements, comparaison avec les autres prestataires : [le hub Technas Pay](https://github.com/Technas-Organization/technas-pay).
 
-Vous intégrez avec un assistant de code (Codex, Claude Code…) ? Dites-lui de lire [AGENTS.md](AGENTS.md).
+Vous intégrez avec un assistant de code ? Dites-lui de lire [AGENTS.md](AGENTS.md).
 
 C'est la même API que le SDK TypeScript [`@technas/pay`](https://github.com/Technas-Organization/technas-pay-node) et le SDK [Python](https://github.com/Technas-Organization/technas-pay-python).
 
@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.4.0
+      ref: v0.4.1
 ```
 
 Sur le serveur, le secret remis par Technas va dans l'environnement :
@@ -133,11 +133,11 @@ Erreurs : `TechnasPayException` avec `code` (à tester), `retryable`, et selon l
 
 ## Paiement par carte
 
-1. **Compte carte, une fois** : au clic du RESPONSABLE, `final link = await pay.startCardOnboarding(country: 'TG', returnUrl: ..., refreshUrl: ...)`, puis redirigez-le vers `link.url` (identité et banque ; le lien expire en minutes).
+1. **Compte carte, une fois** : au clic du RESPONSABLE, `final link = await pay.startCardOnboarding(country: 'TG', returnUrl: ..., refreshUrl: ...)`, puis redirigez-le vers `link.url`, sur la page sécurisée de notre partenaire carte (Stripe), qui vous fera accepter son contrat (identité et banque ; le lien expire en minutes).
 2. **Attendez `(await pay.getCardAccount()).canAcceptPayments`** (ou `onCardAccountUpdated`). Avant, `method: 'card'` lève `card_account_not_ready` (`e.accountStatus`).
 3. **Faire payer** : `pay.askForPayment(method: 'card', amount: 12.5, currency: 'EUR', ...)`. Devise obligatoire, décimales permises.
-4. **L'argent va directement sur le compte carte**, commission Technas déjà retirée : il n'apparaît pas dans `getBalance()`. Un remboursement repart sur la carte (`refund.kind == 'stripe'`).
-5. **Tableau de bord** : `pay.getCardDashboardLink()` → https://dashboard.stripe.com/, identifiants Stripe du responsable.
+4. **L'argent va directement sur le compte carte**, commission Technas déjà retirée : il n'apparaît pas dans `getBalance()`. Un remboursement repart sur la carte (`refund.kind == 'card'`).
+5. **Tableau de bord** : `pay.getCardDashboardLink()` → le tableau de bord de votre compte carte, identifiants du responsable.
 6. **App** : `pay.appRoutes(..., card: true, authorizeAdmin: ...)`. Côté Flutter, `order: {'orderId': id, 'method': 'card'}` ; l'écran du marchand utilise `cardAccount()` et `startCardOnboarding(...)` de `TechnasPayClient`.
 
 ## La règle de relance
