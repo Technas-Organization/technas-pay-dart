@@ -127,7 +127,7 @@ Ne réécrivez pas de routes : `technasPayShelfHandler(pay.appRoutes(authorize: 
 ## Rembourser
 
 - `pay.refund(paymentId)` rembourse tout ce qui reste ; `amount:` une partie. L'argent repart au numéro qui a payé.
-- Plafond : jamais plus que le montant payé. La commission de 2 % n'est pas rendue.
+- Plafond : jamais plus que le montant payé. La commission Technas n'est pas rendue.
 - `fees: 'partner'` (défaut : le client reçoit tout) ou `'customer'` (frais retirés de `sentAmount`).
 - Rejouer le même appel ne rembourse pas deux fois. Deux remboursements partiels identiques voulus : une `reference` chacun.
 - `insufficient_balance` : `e.missingAmount` ; `topUpBalance` puis rappeler `refund`.
