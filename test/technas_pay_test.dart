@@ -293,7 +293,7 @@ void main() {
     expect((await pay.getSettlements()).first.fee, 150);
     expect((await pay.getPayoutNetworks('TG')).first.code, 'moov_tg');
     final state = await pay.setPayoutDestination(
-        const PayoutDestination(country: 'TG', network: 'moov_tg', phone: '+22890000000', beneficiaryName: 'Blexima'));
+        const PayoutDestination(country: 'TG', network: 'moov_tg', phone: '+22890000000', beneficiaryName: 'Boutique Awa'));
     expect(state.destinations.first.pending!.status, 'awaiting_confirmation');
     expect((await pay.getPayoutDestination()).destinations.first.current, isNull);
     expect((await pay.topUpBalance(amount: 20000, currency: 'XOF')).checkoutUrl, endsWith('/top_1'));
