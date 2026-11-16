@@ -168,6 +168,16 @@ class TechnasPayClient implements TechnasPayBackend {
   Future<TechnasPaymentState> readPayment(String paymentId) async =>
       _state(await _send('GET', '/payments/${Uri.encodeComponent(paymentId)}', null));
 
+  /// `POST /payments/{id}/cancel` : annule le paiement affiché quand le client change d'offre, et
+  /// rend son état (`expired`, plus de lien). Puis appelez [startPayment] pour la nouvelle offre.
+  ///
+  /// [TechnasBackendException] `payment_in_progress` : une demande est en cours chez l'opérateur, ne
+  /// démarrez PAS un second paiement (relisez plus tard, ou attendez l'issue) ;
+  /// `payment_already_completed` : l'ancienne offre est payée, relisez ([readPayment]) et affichez
+  /// « payé ».
+  Future<TechnasPaymentState> cancelPayment(String paymentId) async =>
+      _state(await _send('POST', '/payments/${Uri.encodeComponent(paymentId)}/cancel', '{}'));
+
   static TechnasPaymentState _state(Map<String, dynamic> data) {
     try {
       return TechnasPaymentState.fromJson(data);

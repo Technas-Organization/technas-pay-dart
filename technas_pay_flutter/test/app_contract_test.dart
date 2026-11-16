@@ -13,6 +13,8 @@ final contract = jsonDecode(File('../contract/app-contract.v1.json').readAsStrin
 final cases = (contract['cases'] as List).cast<Map<String, dynamic>>();
 
 void main() {
+  test('le contrat a 31 cas', () => expect(cases, hasLength(31)));
+
   for (final c in cases) {
     final req = c['request'] as Map;
     final path = req['path'] as String;
@@ -42,6 +44,9 @@ void main() {
           final b = req['body'] as Map;
           return client.startCardOnboarding(
               returnUrl: b['returnUrl'] as String, refreshUrl: b['refreshUrl'] as String, country: b['country'] as String?);
+        }
+        if (method == 'POST' && path.endsWith('/cancel')) {
+          return client.cancelPayment(path.substring('/payments/'.length, path.length - '/cancel'.length));
         }
         if (method == 'POST') return client.startPayment((req['body'] as Map).cast<String, Object?>());
         return client.readPayment(path.substring('/payments/'.length));

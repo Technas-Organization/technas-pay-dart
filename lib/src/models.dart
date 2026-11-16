@@ -46,7 +46,10 @@ class Payment {
         createdAt = j['created_at'] as String?,
         completedAt = j['completed_at'] as String?,
         expiresAt = j['expires_at'] as String?,
-        expiredAt = j['expired_at'] as String?;
+        expiredAt = j['expired_at'] as String?,
+        canceledAt = j['canceled_at'] as String?,
+        cancelReason = j['cancel_reason'] as String?,
+        reason = j['reason'] as String?;
 
   final String id;
   final String reference;
@@ -77,6 +80,16 @@ class Payment {
   final String? completedAt;
   final String? expiresAt;
   final String? expiredAt;
+
+  /// Quand vous l'avez annulé (`cancelPayment`) ; null sinon. Un paiement annulé reste `expired`.
+  final String? canceledAt;
+
+  /// `canceled_by_partner`, ou null.
+  final String? cancelReason;
+
+  /// Dans l'avis `payment.expired` : `canceled` (annulé par vous) ou `timeout` (délai dépassé) ;
+  /// null ailleurs et dans un avis plus ancien.
+  final String? reason;
 
   /// Ce que VOTRE backend renvoie à votre app (`{"payment": toAppJson()}`) : ni commission, ni
   /// montant net, ni métadonnées. C'est le contrat que lit `technas_pay_flutter`

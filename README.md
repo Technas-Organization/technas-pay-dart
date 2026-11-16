@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.6.0
+      ref: v0.7.0
 ```
 
 Sur le serveur, le secret remis par Technas va dans l'environnement :
@@ -99,7 +99,7 @@ final routes = pay.appRoutes<MonUser>(
 final router = Router()..mount('/api/technas-pay/', technasPayShelfHandler(routes)); // Dart Frog : fromShelfHandler
 ```
 
-Votre app Flutter les appelle avec `TechnasPayClient(baseUrl: '…/api/technas-pay')`. Contrat : [`contract/app-contract.v1.json`](contract/app-contract.v1.json), rejoué ici, côté Flutter et dans les SDK Node et Python.
+Routes : `GET /methods?orderId=`, `POST /payments` `{orderId}`, `GET /payments/{id}`, `POST /payments/{id}/cancel` (le client change d'offre : l'essai affiché est annulé), `POST /webhook`. Si la commande a changé de montant, `POST /payments` annule lui-même l'ancien essai encore ouvert ; s'il est déjà payé (`payment_already_completed`) ou qu'une demande est en cours chez l'opérateur (`payment_in_progress`), aucun second paiement n'est créé et l'erreur est rendue à l'app. Votre app Flutter les appelle avec `TechnasPayClient(baseUrl: '…/api/technas-pay')`. Contrat : [`contract/app-contract.v1.json`](contract/app-contract.v1.json), rejoué ici, côté Flutter et dans les SDK Node et Python.
 
 ## 4. App Flutter : le paquet `technas_pay_flutter`
 
@@ -116,6 +116,7 @@ Côté serveur, renvoyez `payment.toAppJson()` : c'est le contrat qu'il lit.
 | Méthode | Rôle |
 |---|---|
 | `getPayment(id)`, `getPaymentByReference(ref)` | Statut ; rattraper un webhook manqué |
+| `cancelPayment(id)` | Annuler un paiement que personne n'a commencé à payer (le client change d'offre) |
 | `listTransactions(limit:, status:, cursor:)` | Historique paginé |
 | `refund(paymentId, amount:?, fees: 'partner'\|'customer', reference:?)` | Rembourser au numéro qui a payé |
 | `recordExternalRefund(paymentId, amount:, method:, note:?, recordedBy:?)` | Noter un remboursement fait hors Technas |
@@ -158,7 +159,7 @@ Les chiffres (`thresholdXof`, `graceDays`) viennent de l'API : ne les écrivez j
 
 **Une référence = un essai.** `failed` n'est pas définitif : le client peut encore payer sur la même page pendant une heure. Ne relancez qu'après `payment.expired`, avec `retryReference(orderId, attempt + 1)`.
 
-Le client change d'offre ou revient plus tard : c'est un NOUVEL essai (`retryReference(factureId, n + 1)`), jamais un refus, même si l'essai précédent est encore `pending` ou `failed`. Réutiliser une référence avec un autre montant lève `reference_conflict` ; les routes toutes faites passent seules à l'essai suivant. Au retour du client, relisez le dernier essai (`getPayment`) avant de dire quoi que ce soit. La facture n'est payée que sur `payment.completed` ; si le client a payé deux pages, remboursez l'essai en trop (`refund`).
+Le client change d'offre ou revient plus tard : c'est un NOUVEL essai (`retryReference(factureId, n + 1)`), jamais un refus, même si l'essai précédent est encore `pending` ou `failed`. Autre offre : ANNULEZ d'abord l'ancien essai (`pay.cancelPayment(ancienId)`), puis créez le nouveau avec une NOUVELLE référence. Si l'annulation répond `payment_in_progress` (une demande est en cours chez l'opérateur), ne créez PAS de second paiement : attendez l'avis de l'issue ; `payment_already_completed` : le client a payé l'ancienne offre, relisez le paiement et ne créez rien. Un paiement annulé reste `expired` (`canRetry` marche tel quel), avec `canceledAt` et `cancelReason` ; son avis `payment.expired` porte `reason` = `canceled` (`timeout` pour une échéance passée). Réutiliser une référence avec un autre montant lève `reference_conflict` ; les routes toutes faites annulent l'ancien essai et passent seules à l'essai suivant. Au retour du client, relisez le dernier essai (`getPayment`) avant de dire quoi que ce soit. La facture n'est payée que sur `payment.completed` ; si le client a payé deux pages, remboursez l'essai en trop (`refund`).
 
 ```dart
 /// Au clic « payer » : [montant] est celui de l'offre choisie MAINTENANT.
@@ -167,9 +168,18 @@ Future<String?> payer(Facture facture, int montant) async {
   if (dernierId != null) {
     final dernier = await pay.getPayment(dernierId); // la vérité est chez Technas
     if (dernier.status == 'completed') return null; // déjà payée
+    final memeOffre = dernier.amount == montant;
+    if (memeOffre && dernier.status != 'expired' && dernier.checkoutUrl != null) {
+      return dernier.checkoutUrl; // pending ou failed : même page, le client peut encore payer
+    }
+    if (dernier.status != 'expired') {
+      // Autre offre : l'ancien lien est fermé d'abord. payment_in_progress (demande en cours chez
+      // l'opérateur) ou payment_already_completed (déjà payé) remontent : on ne crée alors AUCUN
+      // second paiement.
+      await pay.cancelPayment(dernier.id);
+    }
   }
-  // pending, failed, expired ou autre montant : nouvel essai, jamais un refus
-  facture.essai += 1;
+  facture.essai += 1; // nouvel essai, nouvelle référence, jamais un refus
   final paiement = await pay.askForPayment(
     amount: montant,
     reference: retryReference(facture.id, facture.essai),

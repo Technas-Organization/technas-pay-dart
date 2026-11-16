@@ -51,7 +51,7 @@ C'est tout. L'app ouvre la page Technas, relit le statut, gère le refus, l'expi
 | Python Flask / Django | `.flask_blueprint()` / `path("api/technas-pay/<path:rest>", routes.django_view())` |
 | Dart shelf / Dart Frog | `technasPayShelfHandler(pay.appRoutes(...))` monté sur `/api/technas-pay/` (`package:technas_pay/shelf.dart`) |
 
-Routes : `GET /methods?orderId=`, `POST /payments` `{orderId}`, `GET /payments/{id}`, `POST /webhook`. La dernière est l'adresse de webhook à déclarer à Technas. Les essais expirés, ou d'un autre montant (le client a changé d'offre), sont sautés tout seuls (`42-1`, `42-2`…) : rien à stocker côté serveur. Le contrat [`contract/app-contract.v1.json`](../contract/app-contract.v1.json) est rejoué par ce client et par chaque SDK serveur.
+Routes : `GET /methods?orderId=`, `POST /payments` `{orderId}`, `GET /payments/{id}`, `POST /payments/{id}/cancel`, `POST /webhook`. La dernière est l'adresse de webhook à déclarer à Technas. Les essais expirés sont sautés tout seuls (`42-1`, `42-2`…) ; un essai d'un autre montant (le client a changé d'offre) est annulé s'il est encore ouvert, puis le suivant est créé : rien à stocker côté serveur. Le contrat [`contract/app-contract.v1.json`](../contract/app-contract.v1.json) est rejoué par ce client et par chaque SDK serveur.
 
 `technasPay.methods(orderId)` rend les moyens ouverts pour une commande. La carte s'y ouvre quand le serveur monte les routes avec `card: true` et que le compte carte du marchand est prêt. Payer par carte : `order: {'orderId': id, 'method': 'card'}`. L'écran du marchand (jamais celui d'un client) dispose de `cardAccount()` et `startCardOnboarding(...)`.
 
@@ -101,14 +101,27 @@ Couleurs et typographie viennent de `Theme.of(context)`. Le SDK n'écrit aucune 
 - **`failed` n'est pas définitif** : la même page peut encore réussir pendant une heure. Le SDK ne propose jamais « Payer à nouveau » sur un refus, seulement après `expired`. C'est alors votre backend qui crée un nouvel essai, avec une nouvelle référence.
 - **L'app n'envoie jamais le montant.** Votre backend le relit en base.
 - **Au retour du client, relisez avant d'afficher.** Lien de retour, app rouverte ou retour des jours plus tard : relisez le paiement par la route `GET /payments/{id}` avant d'afficher quoi que ce soit (`showTechnasPayment` le fait seul).
-- **Le client change d'offre = un nouvel appel de démarrage, jamais un refus.** Le backend relit la commande au nouveau montant et crée l'essai suivant tout seul.
+- **Le client change d'offre : annulez le paiement affiché, puis démarrez.** `await technasPay.cancelPayment(paiementAffiche.id)` (route `POST /payments/{id}/cancel`), puis `startPayment(...)` (ou `showTechnasPayment`) : le backend relit la commande au nouveau montant et crée l'essai suivant. Jamais un refus du type « un paiement existe déjà ».
+- **Sur `payment_in_progress`** (`TechnasBackendException.code`) : une demande est en cours chez l'opérateur, ne démarrez PAS un second paiement ; relisez plus tard (`readPayment`) et affichez l'issue.
+- **Sur `payment_already_completed`** : l'ancienne offre est payée ; relisez (`readPayment`) et affichez « payé ». Rien à démarrer.
 
 ```dart
 // Au retour du client : la vérité vient du backend, jamais de l'état gardé dans l'app.
 final etat = await technasPay.readPayment(dernierPaiementId); // GET /payments/{id}
 if (etat.isPaid) return afficherPayee();
 
-// Il a choisi une autre offre : la commande porte le nouveau montant en base, on redémarre.
+// Il a choisi une autre offre : l'ancien lien est fermé, puis on redémarre (la commande porte le
+// nouveau montant en base).
+try {
+  await technasPay.cancelPayment(paiementAffiche.id); // POST /payments/{id}/cancel
+} on TechnasBackendException catch (e) {
+  if (e.code == 'payment_already_completed') {
+    final paye = await technasPay.readPayment(paiementAffiche.id);
+    return afficherPayee(paye); // l'ancienne offre est payée : rien à démarrer
+  }
+  if (e.code == 'payment_in_progress') return afficherEnCours(); // AUCUN second paiement
+  rethrow;
+}
 final result = await showTechnasPayment(context, backend: technasPay, order: {'orderId': commande.id});
 ```
 

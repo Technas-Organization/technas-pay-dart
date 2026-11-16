@@ -504,4 +504,85 @@ void main() {
       expect(app.currencyForCountry(' tg '), 'XOF');
     });
   });
+  group('le client change d\'offre : annuler l\'ancien essai', () {
+    final annule = {
+      'id': 'pay_1',
+      'reference': 'F-1',
+      'amount': 5000,
+      'currency': null,
+      'commission': 100,
+      'net_amount': 4900,
+      'status': 'expired',
+      'checkout_url': null,
+      'metadata': <String, Object?>{},
+      'test_mode': true,
+      'created_at': '2026-11-15T10:00:00Z',
+      'expires_at': '2026-11-15T11:00:00Z',
+      'canceled_at': '2026-11-16T09:00:00Z',
+      'cancel_reason': 'canceled_by_partner',
+    };
+
+    test('cancelPayment : route, champs, idempotence, les deux 409, identifiant vide refusé', () async {
+      final calls = <http.Request>[];
+      final replies = [
+        (200, annule),
+        (200, annule),
+        (409, {'code': 'payment_in_progress', 'message': 'm'}),
+        (409, {'code': 'payment_already_completed', 'message': 'm'}),
+      ];
+      final p2 = TechnasPay(
+        secret: secret,
+        baseUrl: base,
+        httpClient: MockClient((r) async {
+          calls.add(r);
+          final (status, body) = replies.removeAt(0);
+          return http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
+        }),
+      );
+      final p = await p2.cancelPayment('pay_1');
+      expect(calls[0].method, 'POST');
+      expect(calls[0].url.toString(), '$base/v1/payments/pay_1/cancel');
+      expect(calls[0].headers['Authorization'], 'Bearer $apiKey');
+      expect(p.status, 'expired');
+      expect(p.checkoutUrl, isNull);
+      expect(p.canceledAt, '2026-11-16T09:00:00Z');
+      expect(p.cancelReason, 'canceled_by_partner');
+      expect(canRetry(p.status), isTrue, reason: 'un paiement annulé reste expired');
+      expect((await p2.cancelPayment('pay_1')).canceledAt, '2026-11-16T09:00:00Z', reason: 'rejouer rend le même résultat');
+      await expectLater(
+          p2.cancelPayment('pay_1'),
+          throwsA(isA<TechnasPayException>()
+              .having((e) => e.code, 'code', 'payment_in_progress')
+              .having((e) => e.status, 'status', 409)
+              .having((e) => e.retryable, 'retryable', isTrue)));
+      await expectLater(
+          p2.cancelPayment('pay_1'),
+          throwsA(isA<TechnasPayException>()
+              .having((e) => e.code, 'code', 'payment_already_completed')
+              .having((e) => e.status, 'status', 409)
+              .having((e) => e.retryable, 'retryable', isFalse)));
+      expect(() => p2.cancelPayment(''), throwsA(isA<TechnasPayException>().having((e) => e.code, 'code', 'invalid_request')));
+      expect(calls, hasLength(4));
+    });
+
+    test('cancelPayment échappe l\'identifiant', () async {
+      await expectLater(pay.cancelPayment('../balance'), throwsA(isA<TechnasPayException>()));
+      expect(gw.requests.last.url.path, '/v1/payments/..%2Fbalance/cancel');
+    });
+
+    test('avis payment.expired : reason canceled, timeout ou absent', () async {
+      final seen = <String>[];
+      final h = WebhookHandlers(onExpired: (e) => seen.add('${e.payment!.reason}/${e.payment!.canceledAt}'));
+      const base_ = {'id': 'p', 'reference': 'F-1', 'status': 'expired', 'amount': 1, 'currency': 'XOF'};
+      for (final data in [
+        {...base_, 'reason': 'canceled', 'canceled_at': '2026-11-16T09:00:00Z'},
+        {...base_, 'reason': 'timeout'},
+        base_,
+      ]) {
+        final body = jsonEncode({'id': 'e', 'type': 'payment.expired', 'created_at': 'x', 'data': data});
+        expect((await pay.handleWebhook(body, sign(body, webhookSecret), h)).status, 200);
+      }
+      expect(seen, ['canceled/2026-11-16T09:00:00Z', 'timeout/null', 'null/null']);
+    });
+  });
 }
