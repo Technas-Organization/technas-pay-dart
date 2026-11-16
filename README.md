@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.7.0
+      ref: v0.7.1
 ```
 
 Sur le serveur, le secret remis par Technas va dans l'environnement :

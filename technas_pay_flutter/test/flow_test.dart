@@ -201,7 +201,7 @@ void main() {
       final client = MockClient((r) async {
         seen.add(r);
         final payment = {
-          'id': 'pay 1',
+          'id': 'pay_1',
           'status': r.method == 'POST' ? 'pending' : 'completed',
           'checkout_url': checkout,
           'amount': 5000,
@@ -218,7 +218,7 @@ void main() {
       expect(seen.first.headers['Authorization'], 'Bearer session-user');
       final read = await backend.readPayment(started.id);
       expect(read.isPaid, isTrue);
-      expect(seen.last.url.path, '/technas-pay/payments/pay%201');
+      expect(seen.last.url.path, '/technas-pay/payments/pay_1');
     });
 
     test('erreurs : 4xx non rejouable avec le message, réseau rejouable', () async {

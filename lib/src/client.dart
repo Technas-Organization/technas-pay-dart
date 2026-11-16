@@ -10,7 +10,7 @@ import 'models.dart';
 import 'status.dart';
 import 'webhooks.dart';
 
-const _version = '0.7.0';
+const _version = '0.7.1';
 const defaultBaseUrl = 'https://pay-api.technas.fr';
 const secretEnv = 'TECHNAS_PAY_SECRET';
 
@@ -117,12 +117,15 @@ class TechnasPay {
     return parse(data);
   }
 
-  static String _seg(String s) => Uri.encodeComponent(s);
+  static final _segmentRe = RegExp(r'^[A-Za-z0-9_-]{1,128}$');
 
-  /// L'identifiant d'un paiement, encodé pour le chemin ; vide : refusé avant tout appel.
-  static String _paymentSeg(String id) {
-    if (id.isEmpty) throw TechnasPayException('invalid_request', 'Identifiant de paiement invalide');
-    return _seg(id);
+  /// Un identifiant mis dans un chemin d'URL, refusé avant tout appel s'il sort de
+  /// `[A-Za-z0-9_-]{1,128}` : jamais « . », « .. », « / » ni rien d'encodé (un proxy qui décode `%2F`
+  /// puis normalise le chemin enverrait `../balance` vers une autre route, avec votre clé). Le message
+  /// ne cite pas la valeur reçue.
+  static String _seg(String id) {
+    if (!_segmentRe.hasMatch(id)) throw TechnasPayException('invalid_request', 'Identifiant invalide');
+    return id;
   }
 
   static String _query(Map<String, Object?> q) {
@@ -180,7 +183,7 @@ class TechnasPay {
     });
   }
 
-  Future<Payment> getPayment(String id) => _call('GET', '/v1/payments/${_paymentSeg(id)}', (d) => Payment.fromJson(d as Json));
+  Future<Payment> getPayment(String id) async => _call('GET', '/v1/payments/${_seg(id)}', (d) => Payment.fromJson(d as Json));
 
   /// Annule DÉFINITIVEMENT un paiement que personne n'a commencé à payer (le client change
   /// d'offre) : rend le paiement, `status` `expired`, `checkoutUrl` null, `canceledAt` posé.
@@ -189,8 +192,8 @@ class TechnasPay {
   /// `payment_in_progress` (409, rejouable) : une demande est en cours chez l'opérateur, ne créez PAS
   /// de second paiement, attendez l'avis de l'issue. `payment_already_completed` (409) : le client a
   /// payé, relisez le paiement et ne créez rien.
-  Future<Payment> cancelPayment(String id) =>
-      _call('POST', '/v1/payments/${_paymentSeg(id)}/cancel', (d) => Payment.fromJson(d as Json), <String, Object?>{});
+  Future<Payment> cancelPayment(String id) async =>
+      _call('POST', '/v1/payments/${_seg(id)}/cancel', (d) => Payment.fromJson(d as Json), <String, Object?>{});
 
   /// Pour rattraper un webhook manqué.
   Future<Payment> getPaymentByReference(String reference) =>
@@ -211,7 +214,7 @@ class TechnasPay {
 
   /// Rembourse un paiement `completed`, au numéro qui a payé. Sans [amount] : tout ce qui reste.
   /// [fees] : `partner` (défaut, le client reçoit tout) ou `customer`. Réservé à un administrateur.
-  Future<Refund> refund(String paymentId, {num? amount, String fees = 'partner', String? reference}) {
+  Future<Refund> refund(String paymentId, {num? amount, String fees = 'partner', String? reference}) async {
     // Décimales permises pour un paiement par carte ; Technas refuse un remboursement mobile money
     // non entier (`invalid_amount`).
     if (amount != null) _positiveAmount(amount);
@@ -227,7 +230,7 @@ class TechnasPay {
 
   /// Enregistre un remboursement fait HORS Technas (Flooz, espèces…). Aucun argent ne bouge.
   Future<Refund> recordExternalRefund(String paymentId,
-      {required int amount, required String method, String? note, String? recordedBy, String? reference}) {
+      {required int amount, required String method, String? note, String? recordedBy, String? reference}) async {
     _positiveInt(amount);
     if (method.trim().isEmpty) throw TechnasPayException('invalid_request', 'method est obligatoire : "Flooz", "Espèces"…');
     return _call('POST', '/v1/payments/${_seg(paymentId)}/external-refunds', (d) => Refund.fromJson(d as Json), {
@@ -239,7 +242,7 @@ class TechnasPay {
     });
   }
 
-  Future<Refund> getRefund(String id) => _call('GET', '/v1/refunds/${_seg(id)}', (d) => Refund.fromJson(d as Json));
+  Future<Refund> getRefund(String id) async => _call('GET', '/v1/refunds/${_seg(id)}', (d) => Refund.fromJson(d as Json));
 
   /// Recharge votre solde : ouvrez `checkoutUrl`. Crédit : webhook `balance.topped_up`.
   Future<TopUp> topUpBalance({required int amount, required String currency, String? returnUrl}) {
