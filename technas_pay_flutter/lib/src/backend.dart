@@ -165,8 +165,7 @@ class TechnasPayClient implements TechnasPayBackend {
 
   /// `GET /payments/{id}`.
   @override
-  Future<TechnasPaymentState> readPayment(String paymentId) async =>
-      _state(await _send('GET', '/payments/${Uri.encodeComponent(paymentId)}', null));
+  Future<TechnasPaymentState> readPayment(String paymentId) async => _state(await _send('GET', '/payments/${_seg(paymentId)}', null));
 
   /// `POST /payments/{id}/cancel` : annule le paiement affiché quand le client change d'offre, et
   /// rend son état (`expired`, plus de lien). Puis appelez [startPayment] pour la nouvelle offre.
@@ -176,7 +175,19 @@ class TechnasPayClient implements TechnasPayBackend {
   /// `payment_already_completed` : l'ancienne offre est payée, relisez ([readPayment]) et affichez
   /// « payé ».
   Future<TechnasPaymentState> cancelPayment(String paymentId) async =>
-      _state(await _send('POST', '/payments/${Uri.encodeComponent(paymentId)}/cancel', '{}'));
+      _state(await _send('POST', '/payments/${_seg(paymentId)}/cancel', '{}'));
+
+  static final _segmentRe = RegExp(r'^[A-Za-z0-9_-]{1,128}$');
+
+  /// L'identifiant d'un paiement, mis tel quel dans le chemin : hors de `[A-Za-z0-9_-]{1,128}`,
+  /// refusé avant tout appel (`invalid_request`, non rejouable). Jamais « . », « .. », « / » ni rien
+  /// d'encodé : un proxy qui décode `%2F` puis normalise le chemin viserait une autre route.
+  static String _seg(String id) {
+    if (!_segmentRe.hasMatch(id)) {
+      throw TechnasBackendException('Identifiant invalide', code: 'invalid_request', retryable: false);
+    }
+    return id;
+  }
 
   static TechnasPaymentState _state(Map<String, dynamic> data) {
     try {

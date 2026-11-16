@@ -80,6 +80,40 @@ void main() {
     });
   }
 
+  group('identifiant mal formé : introuvable, sans appel', () {
+    final cas = <(String, String, Map<String, String>, Object?, String)>[
+      ('GET', '/payments/..%2Fbalance', {}, null, 'payment_not_found'),
+      ('POST', '/payments/..%2Fbalance/cancel', {}, null, 'payment_not_found'),
+      ('GET', '/payments/pay%201', {}, null, 'payment_not_found'),
+      ('GET', '/payments/a%252Fb', {}, null, 'payment_not_found'),
+      ('GET', '/payments/%ZZ', {}, null, 'payment_not_found'),
+      ('GET', '/payments/${'x' * 129}', {}, null, 'payment_not_found'),
+      ('GET', '/methods', {'orderId': '../42'}, null, 'order_not_found'),
+      ('GET', '/methods', {'orderId': '42 1'}, null, 'order_not_found'),
+      ('POST', '/payments', {}, {'orderId': '../balance'}, 'order_not_found'),
+      ('POST', '/payments', {}, {'orderId': 'a/b'}, 'order_not_found'),
+    ];
+    for (final (method, path, query, body, code) in cas) {
+      test('$method $path $query $body → $code', () async {
+        final gw = Gateway([]);
+        final resolved = <String>[];
+        final routes = TechnasPay(secret: secret, baseUrl: 'https://gw.test', httpClient: gw.client).appRoutes<String>(
+          authorize: (_) => 'u1',
+          resolveOrder: (id, _) {
+            resolved.add(id);
+            return const AppOrder(amount: 5000, customer: {'name': 'Awa'});
+          },
+          returnUrl: 'https://app.test/retour',
+        );
+        final r = await routes.handle(AppRequest(method: method, path: path, query: query, rawBody: body == null ? '' : jsonEncode(body)));
+        expect(r.status, 404);
+        expect((r.body as Map)['code'], code);
+        expect(gw.calls, isEmpty);
+        expect(resolved, isEmpty);
+      });
+    }
+  });
+
   test('webhook : signé → vos fonctions ; mauvaise signature → 400 ; non branché → 404', () async {
     final paid = <String>[];
     final c = {'user': 'u1', 'orders': <String, Object?>{}};

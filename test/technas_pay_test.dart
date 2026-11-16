@@ -302,9 +302,48 @@ void main() {
     expect(rules.excluded, ['NG']);
   });
 
-  test('identifiant échappé dans le chemin', () async {
-    await expectLater(pay.getPayment('../balance'), throwsA(isA<TechnasPayException>()));
-    expect(gw.requests.last.url.path, '/v1/payments/..%2Fbalance');
+  group('identifiant mal formé : refusé avant tout appel', () {
+    const invalides = ['../balance', '..', '.', 'a/b', 'a%2Fb', '', 'pay 1', 'pay_1\n', 'é'];
+    final appels = <String, Future<Object?> Function(TechnasPay, String)>{
+      'getPayment': (c, i) => c.getPayment(i),
+      'cancelPayment': (c, i) => c.cancelPayment(i),
+      'refund': (c, i) => c.refund(i, amount: 100),
+      'recordExternalRefund': (c, i) => c.recordExternalRefund(i, amount: 100, method: 'Espèces'),
+      'getRefund': (c, i) => c.getRefund(i),
+      'simulateTestPayment': (c, i) => c.simulateTestPayment(i, 'completed'),
+    };
+    for (final appel in appels.entries) {
+      test(appel.key, () async {
+        for (final id in [...invalides, 'x' * 129]) {
+          await expectLater(
+              appel.value(pay, id),
+              throwsA(isA<TechnasPayException>()
+                  .having((e) => e.code, 'code', 'invalid_request')
+                  .having((e) => e.status, 'status', 0)
+                  .having((e) => e.retryable, 'retryable', isFalse)
+                  .having((e) => id.isNotEmpty && e.message.contains(id), 'cite la valeur', isFalse)),
+              reason: id);
+        }
+        expect(gw.requests, isEmpty);
+      });
+    }
+
+    for (final id in ['pay_1', '3f2b8c1e-9a4d-4e2b-8f61-0c7d5e9a1b23']) {
+      test('identifiant valide part tel quel : $id', () async {
+        final paths = <String>[];
+        final c = TechnasPay(
+            secret: secret,
+            baseUrl: base,
+            httpClient: MockClient((r) async {
+              paths.add(r.url.path);
+              return http.Response(jsonEncode({'code': 'payment_not_found', 'message': 'introuvable'}), 404);
+            }));
+        for (final f in [c.getPayment, c.cancelPayment, c.getRefund]) {
+          await expectLater(f(id), throwsA(isA<TechnasPayException>().having((e) => e.code, 'code', 'payment_not_found')));
+        }
+        expect(paths, ['/v1/payments/$id', '/v1/payments/$id/cancel', '/v1/refunds/$id']);
+      });
+    }
   });
 
   test('réseau et 5xx : rejouables ; secret mal formé : ne fuit pas', () async {
@@ -563,11 +602,6 @@ void main() {
               .having((e) => e.retryable, 'retryable', isFalse)));
       expect(() => p2.cancelPayment(''), throwsA(isA<TechnasPayException>().having((e) => e.code, 'code', 'invalid_request')));
       expect(calls, hasLength(4));
-    });
-
-    test('cancelPayment échappe l\'identifiant', () async {
-      await expectLater(pay.cancelPayment('../balance'), throwsA(isA<TechnasPayException>()));
-      expect(gw.requests.last.url.path, '/v1/payments/..%2Fbalance/cancel');
     });
 
     test('avis payment.expired : reason canceled, timeout ou absent', () async {

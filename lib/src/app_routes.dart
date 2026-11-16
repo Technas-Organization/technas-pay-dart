@@ -90,6 +90,8 @@ Map<String, Object?> _appAccount(CardAccount a) => {
 
 final _paymentPath = RegExp(r'^/payments/([^/]+)$');
 final _cancelPath = RegExp(r'^/payments/([^/]+)/cancel$');
+// Un identifiant de commande ou de paiement : hors de ce motif, « introuvable » sans aucun appel.
+final _id = RegExp(r'^[A-Za-z0-9_-]{1,128}$');
 
 class AppRoutes<User extends Object> {
   AppRoutes(
@@ -240,6 +242,7 @@ class AppRoutes<User extends Object> {
       if (path == '/methods') {
         final orderId = req.query['orderId'];
         if (orderId == null || orderId.isEmpty) return _err(400, 'invalid_request', 'orderId manquant');
+        if (!_id.hasMatch(orderId)) return _err(404, 'order_not_found', 'Commande introuvable');
         final order = await resolveOrder(orderId, user);
         if (order == null) return _err(404, 'order_not_found', 'Commande introuvable');
         return AppResponse(200, {
@@ -263,6 +266,7 @@ class AppRoutes<User extends Object> {
         final raw = body is Map ? body['orderId'] : null;
         final orderId = raw is String || raw is int ? '$raw' : '';
         if (orderId.isEmpty) return _err(400, 'invalid_request', 'orderId manquant');
+        if (!_id.hasMatch(orderId)) return _err(404, 'order_not_found', 'Commande introuvable');
         final payMethod = (body as Map)['method'] ?? 'mobile_money';
         if (payMethod != 'mobile_money' && payMethod != 'card') {
           return _err(400, 'invalid_request', 'method vaut "mobile_money" ou "card"');
@@ -278,7 +282,13 @@ class AppRoutes<User extends Object> {
 
       // GET /payments/{id} et POST /payments/{id}/cancel : seulement si la commande de ce paiement est
       // à cet utilisateur.
-      final id = Uri.decodeComponent((cancel ?? _paymentPath.firstMatch(path))!.group(1)!);
+      final String id;
+      try {
+        id = Uri.decodeComponent((cancel ?? _paymentPath.firstMatch(path))!.group(1)!);
+      } on ArgumentError {
+        return _err(404, 'payment_not_found', 'Paiement introuvable');
+      }
+      if (!_id.hasMatch(id)) return _err(404, 'payment_not_found', 'Paiement introuvable');
       Payment payment;
       try {
         payment = await _pay.getPayment(id);

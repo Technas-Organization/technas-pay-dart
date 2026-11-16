@@ -111,4 +111,29 @@ void main() {
     await backend.startPayment({'orderId': '1'});
     expect(seen.path, '/technas-pay/payments');
   });
+
+  test('identifiant de paiement mal formé : refusé avant tout appel, un valide part tel quel', () async {
+    final paths = <String>[];
+    final client = TechnasPayClient(
+      baseUrl: 'https://x.test/api/technas-pay',
+      client: MockClient((r) async {
+        paths.add(r.url.path);
+        return http.Response('{"payment":{"id":"pay_1","status":"pending"}}', 200);
+      }),
+    );
+    for (final id in ['../balance', '..', '.', 'a/b', 'a%2Fb', '', 'pay 1', 'x' * 129]) {
+      for (final call in [client.readPayment, client.cancelPayment]) {
+        await expectLater(
+            call(id),
+            throwsA(isA<TechnasBackendException>()
+                .having((e) => e.code, 'code', 'invalid_request')
+                .having((e) => e.retryable, 'retryable', isFalse)),
+            reason: id);
+      }
+    }
+    expect(paths, isEmpty);
+    await client.readPayment('pay_1');
+    await client.cancelPayment('3f2b8c1e-9a4d-4e2b-8f61-0c7d5e9a1b23');
+    expect(paths, ['/api/technas-pay/payments/pay_1', '/api/technas-pay/payments/3f2b8c1e-9a4d-4e2b-8f61-0c7d5e9a1b23/cancel']);
+  });
 }

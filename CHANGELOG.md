@@ -1,3 +1,9 @@
+## 0.7.1 — 2026-11-16
+
+- Sécurité : identifiants validés avant tout appel. Un identifiant mis dans un chemin d'URL (`getPayment`, `cancelPayment`, `refund`, `recordExternalRefund`, `getRefund`, `simulateTestPayment`) doit correspondre à `^[A-Za-z0-9_-]{1,128}$` ; sinon `TechnasPayException` `invalid_request` (statut 0, non rejouable), rendue par le `Future`, sans aucun appel et sans citer la valeur reçue. Avant, `getPayment('../balance')` partait encodé (`..%2Fbalance`) avec votre clé : un intermédiaire qui décode puis normalise le chemin pouvait viser une autre route.
+- Routes toutes faites : un identifiant de paiement hors de ce motif (ou mal encodé) rend 404 `payment_not_found`, un `orderId` hors de ce motif 404 `order_not_found`, sans appel. Contrat v1 inchangé (31 cas).
+- `technas_pay_flutter` 0.4.1 : `readPayment` et `cancelPayment` appliquent la même règle avant d'appeler votre backend (`TechnasBackendException` `invalid_request`, non rejouable).
+
 ## 0.7.0 — 2026-11-16
 
 - Annuler un paiement : `cancelPayment(id)` (`POST /v1/payments/{id}/cancel`) annule DÉFINITIVEMENT un paiement que personne n'a commencé à payer ; rend le paiement (`status` `expired`, `checkoutUrl` null). Idempotent. Identifiant vide refusé avant tout appel. `Payment` : `canceledAt`, `cancelReason` ; `Payment` et `EventPayment` : `reason` (avis `payment.expired` : `canceled` ou `timeout`, null dans un avis plus ancien). Nouvelle erreur `payment_already_completed` (409, non rejouable).
