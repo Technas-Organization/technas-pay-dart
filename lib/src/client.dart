@@ -10,7 +10,7 @@ import 'models.dart';
 import 'status.dart';
 import 'webhooks.dart';
 
-const _version = '0.6.0';
+const _version = '0.7.0';
 const defaultBaseUrl = 'https://pay-api.technas.fr';
 const secretEnv = 'TECHNAS_PAY_SECRET';
 
@@ -118,6 +118,13 @@ class TechnasPay {
   }
 
   static String _seg(String s) => Uri.encodeComponent(s);
+
+  /// L'identifiant d'un paiement, encodé pour le chemin ; vide : refusé avant tout appel.
+  static String _paymentSeg(String id) {
+    if (id.isEmpty) throw TechnasPayException('invalid_request', 'Identifiant de paiement invalide');
+    return _seg(id);
+  }
+
   static String _query(Map<String, Object?> q) {
     final entries = q.entries.where((e) => e.value != null);
     if (entries.isEmpty) return '';
@@ -173,7 +180,17 @@ class TechnasPay {
     });
   }
 
-  Future<Payment> getPayment(String id) => _call('GET', '/v1/payments/${_seg(id)}', (d) => Payment.fromJson(d as Json));
+  Future<Payment> getPayment(String id) => _call('GET', '/v1/payments/${_paymentSeg(id)}', (d) => Payment.fromJson(d as Json));
+
+  /// Annule DÉFINITIVEMENT un paiement que personne n'a commencé à payer (le client change
+  /// d'offre) : rend le paiement, `status` `expired`, `checkoutUrl` null, `canceledAt` posé.
+  /// Rejouer rend le même résultat.
+  ///
+  /// `payment_in_progress` (409, rejouable) : une demande est en cours chez l'opérateur, ne créez PAS
+  /// de second paiement, attendez l'avis de l'issue. `payment_already_completed` (409) : le client a
+  /// payé, relisez le paiement et ne créez rien.
+  Future<Payment> cancelPayment(String id) =>
+      _call('POST', '/v1/payments/${_paymentSeg(id)}/cancel', (d) => Payment.fromJson(d as Json), <String, Object?>{});
 
   /// Pour rattraper un webhook manqué.
   Future<Payment> getPaymentByReference(String reference) =>

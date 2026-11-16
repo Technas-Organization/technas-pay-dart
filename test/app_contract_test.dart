@@ -22,7 +22,12 @@ class Gateway {
   final calls = <Map<String, Object?>>[];
 
   MockClient get client => MockClient((r) async {
-        calls.add({'method': r.method, 'path': r.url.path, 'body': r.body.isEmpty ? null : jsonDecode(r.body)});
+        calls.add({
+          'method': r.method,
+          'path': r.url.path,
+          'query': r.url.queryParameters,
+          'body': r.body.isEmpty ? null : jsonDecode(r.body),
+        });
         if (queue.isEmpty) fail('appel imprévu à la passerelle');
         final next = queue.removeAt(0) as Map;
         if (next['body'] == null) return http.Response('<html>panne</html>', next['status'] as int);
@@ -46,6 +51,8 @@ AppRoutes<String> routesFor(Map<String, dynamic> c, TechnasPay pay, {WebhookHand
     );
 
 void main() {
+  test('le contrat a 31 cas', () => expect(cases, hasLength(31)));
+
   for (final c in cases) {
     test('contrat : ${c['name']}', () async {
       final gw = Gateway(c['gateway'] as List);
@@ -68,6 +75,7 @@ void main() {
         expect(gw.calls[i]['method'], exp[i]['method']);
         expect(gw.calls[i]['path'], exp[i]['path']);
         ((exp[i]['body_includes'] as Map?) ?? {}).forEach((k, v) => expect((gw.calls[i]['body'] as Map)[k], v, reason: '$k'));
+        ((exp[i]['query_includes'] as Map?) ?? {}).forEach((k, v) => expect((gw.calls[i]['query'] as Map)[k], v, reason: '$k'));
       }
     });
   }
@@ -115,5 +123,16 @@ void main() {
     expect(res.statusCode, 200);
     expect(jsonDecode(await res.readAsString()), (c['expect'] as Map)['body']);
     expect(seen, 'Bearer jeton');
+  });
+
+  test('shelf : POST /payments/{id}/cancel passe par l\'adaptateur', () async {
+    final c = cases.firstWhere((c) => (c['request'] as Map)['path'] == '/payments/pay_1/cancel' && c['user'] != null);
+    final gw = Gateway(c['gateway'] as List);
+    final pay = TechnasPay(secret: secret, baseUrl: 'https://gw.test', httpClient: gw.client);
+    final handler = technasPayShelfHandler(pay.appRoutes<String>(authorize: (_) => 'u1', resolveOrder: (id, _) => _order(c, id)));
+    final res =
+        await handler(shelf.Request('POST', Uri.parse('http://x/api/technas-pay/payments/pay_1/cancel'), handlerPath: '/api/technas-pay/'));
+    expect(res.statusCode, 200);
+    expect(jsonDecode(await res.readAsString()), (c['expect'] as Map)['body']);
   });
 }

@@ -89,6 +89,7 @@ Map<String, Object?> _appAccount(CardAccount a) => {
     };
 
 final _paymentPath = RegExp(r'^/payments/([^/]+)$');
+final _cancelPath = RegExp(r'^/payments/([^/]+)/cancel$');
 
 class AppRoutes<User extends Object> {
   AppRoutes(
@@ -163,9 +164,11 @@ class AppRoutes<User extends Object> {
   }
 
   Future<Payment> _start(String orderId, AppOrder order, String method) async {
-    // Une référence = un essai : `orderId-1`, `-2`… Un essai expiré (payment_expired) ou d'un autre
-    // montant (reference_conflict : le client a changé d'offre) est sauté : essai suivant, jamais un
-    // refus. Un essai en cours (ou payé) au même montant est rendu tel quel.
+    // Une référence = un essai : `orderId-1`, `-2`… Un essai expiré (payment_expired) est sauté. Un
+    // essai d'un autre montant (reference_conflict : le client a changé d'offre) est annulé s'il est
+    // encore ouvert, puis l'essai suivant est créé ; payé ou demande en cours chez l'opérateur :
+    // AUCUN second paiement, l'erreur remonte à l'app. Un essai en cours (ou payé) au même montant
+    // est rendu tel quel.
     for (var attempt = 1;; attempt++) {
       try {
         return await _pay.askForPayment(
@@ -180,9 +183,33 @@ class AppRoutes<User extends Object> {
           metadata: {...order.metadata, 'order_id': orderId},
         );
       } on TechnasPayException catch (e) {
-        if ((e.code == 'payment_expired' || e.code == 'reference_conflict') && attempt < maxAttempts) continue;
-        rethrow;
+        if (attempt >= maxAttempts || (e.code != 'payment_expired' && e.code != 'reference_conflict')) rethrow;
+        if (e.code == 'reference_conflict') {
+          await _closePrevious(method == 'card' ? '$orderId-card-$attempt' : retryReference(orderId, attempt));
+        }
       }
+    }
+  }
+
+  /// L'ancien essai (autre montant) : annulé s'il est encore ouvert. Payé → 409
+  /// `payment_already_completed` ; `payment_in_progress` à l'annulation remonte tel quel ; un 404 à
+  /// l'annulation (serveur qui ne l'a pas encore) laisse passer à l'essai suivant.
+  Future<void> _closePrevious(String reference) async {
+    final Payment previous;
+    try {
+      previous = await _pay.getPaymentByReference(reference);
+    } on TechnasPayException catch (e) {
+      if (e.code == 'payment_not_found') return;
+      rethrow;
+    }
+    if (previous.status == 'completed') {
+      throw TechnasPayException('payment_already_completed', "L'essai précédent de cette commande est déjà payé", status: 409);
+    }
+    if (previous.status == 'expired') return;
+    try {
+      await _pay.cancelPayment(previous.id);
+    } on TechnasPayException catch (e) {
+      if (e.status != 404) rethrow;
     }
   }
 
@@ -201,7 +228,9 @@ class AppRoutes<User extends Object> {
       return _cardRoutes(req, path);
     }
 
-    final known = (method == 'GET' && (path == '/methods' || _paymentPath.hasMatch(path))) || (method == 'POST' && path == '/payments');
+    final cancel = method == 'POST' ? _cancelPath.firstMatch(path) : null;
+    final known = (method == 'GET' && (path == '/methods' || _paymentPath.hasMatch(path))) ||
+        (method == 'POST' && (path == '/payments' || cancel != null));
     if (!known) return _err(404, 'not_found', 'Route inconnue');
 
     final user = await authorize(req);
@@ -247,9 +276,10 @@ class AppRoutes<User extends Object> {
         return AppResponse(200, {'payment': (await _start(orderId, order, payMethod as String)).toAppJson()});
       }
 
-      // GET /payments/{id} : seulement si la commande de ce paiement est à cet utilisateur.
-      final id = Uri.decodeComponent(_paymentPath.firstMatch(path)!.group(1)!);
-      final Payment payment;
+      // GET /payments/{id} et POST /payments/{id}/cancel : seulement si la commande de ce paiement est
+      // à cet utilisateur.
+      final id = Uri.decodeComponent((cancel ?? _paymentPath.firstMatch(path))!.group(1)!);
+      Payment payment;
       try {
         payment = await _pay.getPayment(id);
       } on TechnasPayException catch (e) {
@@ -259,6 +289,8 @@ class AppRoutes<User extends Object> {
       if (await resolveOrder(_orderIdOf(payment.reference), user) == null) {
         return _err(404, 'payment_not_found', 'Paiement introuvable');
       }
+      // Le client change d'offre : l'essai affiché est annulé avant d'en démarrer un autre.
+      if (cancel != null) payment = await _pay.cancelPayment(payment.id);
       return AppResponse(200, {'payment': payment.toAppJson()});
     } on TechnasPayException catch (e) {
       return _fromPayError(e);

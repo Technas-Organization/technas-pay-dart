@@ -30,7 +30,10 @@ class EventPayment {
         originalCurrency = d['original_currency'] as String?,
         fx = PaymentFx.fromJson(d['fx']),
         expiresAt = d['expires_at'] as String?,
-        expiredAt = d['expired_at'] as String?;
+        expiredAt = d['expired_at'] as String?,
+        reason = d['reason'] as String?,
+        canceledAt = d['canceled_at'] as String?,
+        cancelReason = d['cancel_reason'] as String?;
 
   final String id;
   final String reference;
@@ -48,6 +51,14 @@ class EventPayment {
   final PaymentFx? fx;
   final String? expiresAt;
   final String? expiredAt;
+
+  /// `payment.expired` : `canceled` (annulé par vous, `cancelPayment`) ou `timeout` (délai
+  /// dépassé) ; null dans un avis plus ancien.
+  final String? reason;
+
+  /// `payment.expired` annulé : quand.
+  final String? canceledAt;
+  final String? cancelReason;
 }
 
 /// Un événement vérifié. Selon [type], un seul champ de contenu est rempli ; [data] garde le brut.
