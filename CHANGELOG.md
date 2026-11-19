@@ -1,3 +1,8 @@
+## 0.8.0 — 2026-11-19
+
+- Avis de reversement : `settlement.completed` et `settlement.failed` (l'issue d'un reversement de votre solde vers votre numéro mobile money) arrivent dans `WebhookHandlers(onSettlement:)`, contenu typé `event.settlement` (`SettlementNotice`) : `id`, `amount` (ce qui a quitté le solde), `fee` (frais du versement, à votre charge), `netAmount` (ce qui arrive sur le numéro), `currency`, `status` (`completed` | `failed`), `createdAt`. Tous facultatifs : un champ absent se lit `null`. Sur `settlement.failed`, `amount` est recrédité sur le solde. Avant, ces deux avis n'appelaient aucune fonction.
+- `technas_pay_flutter` inchangé (0.4.1).
+
 ## 0.7.1 — 2026-11-16
 
 - Sécurité : identifiants validés avant tout appel. Un identifiant mis dans un chemin d'URL (`getPayment`, `cancelPayment`, `refund`, `recordExternalRefund`, `getRefund`, `simulateTestPayment`) doit correspondre à `^[A-Za-z0-9_-]{1,128}$` ; sinon `TechnasPayException` `invalid_request` (statut 0, non rejouable), rendue par le `Future`, sans aucun appel et sans citer la valeur reçue. Avant, `getPayment('../balance')` partait encodé (`..%2Fbalance`) avec votre clé : un intermédiaire qui décode puis normalise le chemin pouvait viser une autre route.

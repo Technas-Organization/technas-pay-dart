@@ -137,6 +137,36 @@ class Settlement {
   final String? createdAt;
 }
 
+/// Contenu des avis `settlement.completed` et `settlement.failed` : l'issue d'un reversement de
+/// votre solde vers votre numéro mobile money. Tous facultatifs : un champ absent se lit `null`.
+class SettlementNotice {
+  SettlementNotice.fromJson(Json j)
+      : id = j['id'] as String?,
+        amount = j['amount'] as num?,
+        fee = j['fee'] as num?,
+        netAmount = j['net_amount'] as num?,
+        currency = j['currency'] as String?,
+        status = j['status'] as String?,
+        createdAt = j['created_at'] as String?;
+
+  /// Identifiant du reversement, le même que dans `getSettlements()`.
+  final String? id;
+
+  /// Ce qui a quitté votre solde. Sur `settlement.failed`, cette somme y est recréditée.
+  final num? amount;
+
+  /// Frais du versement mobile money, à votre charge.
+  final num? fee;
+
+  /// Ce qui arrive sur votre numéro.
+  final num? netAmount;
+  final String? currency;
+
+  /// `completed` | `failed`
+  final String? status;
+  final String? createdAt;
+}
+
 /// Le numéro mobile money où Technas vous reverse votre solde.
 class PayoutDestination {
   const PayoutDestination({required this.country, required this.network, required this.phone, required this.beneficiaryName});

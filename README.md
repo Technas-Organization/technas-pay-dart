@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.7.1
+      ref: v0.8.0
 ```
 
 Sur le serveur, le secret remis par Technas va dans l'environnement :
@@ -123,6 +123,7 @@ Côté serveur, renvoyez `payment.toAppJson()` : c'est le contrat qu'il lit.
 | `getRefund(id)` | Statut d'un remboursement |
 | `topUpBalance(amount:, currency:, returnUrl:?)` | Recharger le solde |
 | `getBalance()`, `getSettlements()` | Solde par devise, reversements |
+| `WebhookHandlers(onSettlement:)` | Issue d'un reversement : avis `settlement.completed`, `settlement.failed` |
 | `getAccountKyc()` | Seuil d'identité : cumul, échéance, lien de la console |
 | `getFxMode()`, `setFxMode(mode:, acceptRisk:, markupPct:?)` | Clients hors zone franc CFA (option à risque) |
 | `setCountryRules(allowed:?, excluded:)` | Où vous vendez |
@@ -130,6 +131,8 @@ Côté serveur, renvoyez `payment.toAppJson()` : c'est le contrat qu'il lit.
 | `verifyWebhook(raw, signature)`, `handleWebhook(raw, signature, handlers)` | Webhooks |
 | `createTestWebhook(type, reference:, amount:, currency:)` | Webhook signé pour vos tests |
 | `simulateTestPayment(id, 'completed'\|'failed'\|'expired')` | Jouer le payeur en test |
+
+Reversements : les avis `settlement.completed` et `settlement.failed` disent l'issue d'un reversement de votre solde vers votre numéro mobile money. `event.settlement!` (`SettlementNotice`) porte `id`, `amount` (ce qui a quitté le solde), `fee` (frais du versement, à votre charge), `netAmount` (ce qui arrive sur le numéro), `currency`, `status`, `createdAt` ; un champ absent se lit `null`. Sur `settlement.failed`, `amount` est recrédité sur le solde.
 
 Erreurs : `TechnasPayException` avec `code` (à tester), `retryable`, et selon le code `missingAmount`, `refundableAmount`, `reason`, `risk`, `accountStatus`, `consoleUrl`, `version`. `kyc_required` (409, `consoleUrl`, `reason` : `amount` | `duration`) et `contract_required` (409, `consoleUrl`, `version` du contrat à accepter dans la console) ne se réessaient jamais. Liste et conduite à tenir : [AGENTS.md](AGENTS.md#erreurs).
 

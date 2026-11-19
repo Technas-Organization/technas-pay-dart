@@ -65,7 +65,7 @@ class EventPayment {
 /// [id] est stable d'une livraison à l'autre : servez-vous-en pour ignorer un doublon.
 class TechnasPayEvent {
   TechnasPayEvent._(this.id, this.type, this.createdAt, this.data,
-      {this.payment, this.refund, this.destination, this.cardAccount, this.kycRequired});
+      {this.payment, this.refund, this.destination, this.cardAccount, this.kycRequired, this.settlement});
 
   final String id;
   final String type;
@@ -80,6 +80,9 @@ class TechnasPayEvent {
 
   /// `account.kyc_required` : seuil d'identité proche ou atteint.
   final KycRequiredNotice? kycRequired;
+
+  /// `settlement.completed` / `settlement.failed` : l'issue d'un reversement de votre solde.
+  final SettlementNotice? settlement;
 
   static TechnasPayEvent parse(Object? raw) {
     if (raw is! Map || raw['id'] is! String || raw['type'] is! String || raw['data'] is! Map) {
@@ -101,6 +104,9 @@ class TechnasPayEvent {
       }
       if (type == 'account.kyc_required') {
         return TechnasPayEvent._(id, type, createdAt, d, kycRequired: KycRequiredNotice.fromJson(d));
+      }
+      if (type == 'settlement.completed' || type == 'settlement.failed') {
+        return TechnasPayEvent._(id, type, createdAt, d, settlement: SettlementNotice.fromJson(d));
       }
       if (type == 'payout_destination.change_scheduled' || type == 'payout_destination.updated') {
         return TechnasPayEvent._(id, type, createdAt, d, destination: PayoutDestinationView.fromJson(d));
@@ -170,6 +176,7 @@ class WebhookHandlers {
     this.onFxModeUpdated,
     this.onCardAccountUpdated,
     this.onKycRequired,
+    this.onSettlement,
   });
 
   /// Marquez la commande payée (`event.payment!.reference`).
@@ -197,6 +204,10 @@ class WebhookHandlers {
   /// le RESPONSABLE du compte, avec `event.kycRequired!.consoleUrl`.
   final WebhookCallback? onKycRequired;
 
+  /// `settlement.completed` / `settlement.failed` : l'issue d'un reversement de votre solde vers
+  /// votre numéro mobile money (`event.settlement!`). Sur `failed`, `amount` est recrédité.
+  final WebhookCallback? onSettlement;
+
   WebhookCallback? forType(String type) {
     if (type == 'payment.completed') return onCompleted;
     if (type == 'payment.failed') return onFailed;
@@ -208,6 +219,7 @@ class WebhookHandlers {
     if (type == 'fx_mode.updated') return onFxModeUpdated;
     if (type == 'card_account.updated') return onCardAccountUpdated;
     if (type == 'account.kyc_required') return onKycRequired;
+    if (type == 'settlement.completed' || type == 'settlement.failed') return onSettlement;
     return null; // type inconnu : acquitté sans rien appeler
   }
 }

@@ -503,6 +503,45 @@ void main() {
       expect(k.firstCollectedAt, '2026-10-15T09:00:00Z');
     });
 
+    test('settlement.completed et settlement.failed : onSettlement, contenu typé', () async {
+      final got = <TechnasPayEvent>[];
+      final h = WebhookHandlers(onSettlement: got.add, onCompleted: (_) => fail('appelée'));
+      for (final status in ['completed', 'failed']) {
+        final body = jsonEncode({
+          'id': 'evt_set_$status',
+          'type': 'settlement.$status',
+          'created_at': '2026-11-19T21:18:32+00:00',
+          'data': {
+            'id': 'set_1',
+            'amount': 392,
+            'fee': 61,
+            'net_amount': 331,
+            'currency': 'XOF',
+            'status': status,
+            'created_at': '2026-11-19T21:15:59+00:00',
+          },
+        });
+        expect((await pay.handleWebhook(body, sign(body, webhookSecret), h)).status, 200);
+      }
+      expect(got.map((e) => e.type), ['settlement.completed', 'settlement.failed']);
+      final s = got.first.settlement!;
+      expect(s.id, 'set_1');
+      expect(s.amount, 392);
+      expect(s.fee, 61);
+      expect(s.netAmount, 331);
+      expect(s.currency, 'XOF');
+      expect(s.status, 'completed');
+      expect(s.createdAt, '2026-11-19T21:15:59+00:00');
+      expect(got.first.payment, isNull);
+      expect(got.last.settlement!.status, 'failed');
+      expect(got.last.settlement!.amount, 392);
+
+      // Champs absents : null, jamais une exception.
+      final vide = jsonEncode({'id': 'evt_set_vide', 'type': 'settlement.failed', 'created_at': 'x', 'data': <String, dynamic>{}});
+      final v = pay.verifyWebhook(vide, sign(vide, webhookSecret)).settlement!;
+      expect([v.id, v.amount, v.fee, v.netAmount, v.currency, v.status, v.createdAt], everyElement(isNull));
+    });
+
     test('createTestWebhook passe la vérification', () async {
       final hook = pay.createTestWebhook('payment.completed', reference: 'cmd_9-1', amount: 5000, currency: 'XOF', commission: 100);
       TechnasPayEvent? got;

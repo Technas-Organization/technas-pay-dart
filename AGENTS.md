@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.7.1
+      ref: v0.8.0
 ```
 
 ## Quelle méthode pour quoi
@@ -44,6 +44,7 @@ dependencies:
 | Savoir que le remboursement est arrivé | `onRefund` (`refund.completed`, `refund.failed`, `refund.recorded`) |
 | Recharger le solde | `pay.topUpBalance(amount: ..., currency: 'XOF')`, ouvrir `checkoutUrl` ; `onTopUp` |
 | Solde, reversements | `pay.getBalance()`, `pay.getSettlements()` |
+| Savoir qu'un reversement est arrivé ou a échoué | `onSettlement` (`settlement.completed`, `settlement.failed`) |
 | Historique | `pay.listTransactions(limit:, status:, cursor:)` |
 | Seuil d'identité (à montrer au marchand) | `pay.getAccountKyc()` ; avis `onKycRequired` |
 | Pays hors zone CFA ouverts, risques | `pay.getFxMode()` |
@@ -188,6 +189,7 @@ final handlers = WebhookHandlers(onCompleted: (event) async {
 - **Ils peuvent arriver plusieurs fois** : vos fonctions doivent le supporter (vérifiez l'état en base ou gardez `event.id`).
 - **Ne rattrapez pas leurs exceptions pour répondre 200** : elles doivent remonter (5xx) pour que Technas relivre.
 - `onRefund` : prévenez le client (e-mail, SMS). Technas ne lui écrit pas. `refund.failed` : rien n'est parti, votre solde est recrédité.
+- `onSettlement` : l'issue d'un reversement de votre solde vers votre numéro mobile money. `event.settlement!` porte `amount` (ce qui a quitté le solde), `fee` (frais du versement, à votre charge), `netAmount` (ce qui arrive sur le numéro), `currency`, `status`. `settlement.failed` : `amount` est recrédité sur le solde. Un champ absent se lit `null`.
 
 ## Rembourser
 
