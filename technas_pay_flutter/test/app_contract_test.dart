@@ -13,7 +13,7 @@ final contract = jsonDecode(File('../contract/app-contract.v1.json').readAsStrin
 final cases = (contract['cases'] as List).cast<Map<String, dynamic>>();
 
 void main() {
-  test('le contrat a 31 cas', () => expect(cases, hasLength(31)));
+  test('le contrat a 32 cas', () => expect(cases, hasLength(32)));
 
   for (final c in cases) {
     final req = c['request'] as Map;

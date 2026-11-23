@@ -51,7 +51,7 @@ AppRoutes<String> routesFor(Map<String, dynamic> c, TechnasPay pay, {WebhookHand
     );
 
 void main() {
-  test('le contrat a 31 cas', () => expect(cases, hasLength(31)));
+  test('le contrat a 32 cas', () => expect(cases, hasLength(32)));
 
   for (final c in cases) {
     test('contrat : ${c['name']}', () async {

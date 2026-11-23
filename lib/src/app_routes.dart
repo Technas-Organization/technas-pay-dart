@@ -211,7 +211,9 @@ class AppRoutes<User extends Object> {
     try {
       await _pay.cancelPayment(previous.id);
     } on TechnasPayException catch (e) {
-      if (e.status != 404) rethrow;
+      // Échoué, rien en cours, page encore ouverte jusqu'à son échéance : on ne la déclare pas
+      // close, essai suivant (deux pages payées = remboursement de l'essai en trop).
+      if (e.status != 404 && e.code != 'payment_failed_page_open') rethrow;
     }
   }
 

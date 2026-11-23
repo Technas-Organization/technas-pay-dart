@@ -10,7 +10,7 @@ import 'models.dart';
 import 'status.dart';
 import 'webhooks.dart';
 
-const _version = '0.8.0';
+const _version = '0.8.1';
 const defaultBaseUrl = 'https://pay-api.technas.fr';
 const secretEnv = 'TECHNAS_PAY_SECRET';
 
