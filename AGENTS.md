@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.8.0
+      ref: v0.9.0
 ```
 
 ## Quelle méthode pour quoi
@@ -35,6 +35,8 @@ dependencies:
 | Besoin | Appel |
 |---|---|
 | Faire payer une commande | `pay.askForPayment(amount: ..., reference: retryReference(orderId, attempt), customer: {'email': ..., 'name': ...}, returnUrl: ...)`, puis rendre `payment.checkoutUrl` à l'app ou rediriger (303) |
+| Savoir combien le client paiera et combien vous recevrez, avant de créer le paiement | `pay.quote(amount: ..., country: ..., fees: ?)` (ou `pay.getFees`) → `customerTotal` (à afficher au client), `processingFee`, `commission`, `netAmount`, `networks` |
+| Faire payer TOUS les frais au client (vous recevez exactement `amount`) | `fees: 'customer'` dans `askForPayment` (ou réglage du compte) ; `'partner'` : le client paie `amount`, frais compris |
 | Savoir qu'elle est payée | webhook, `WebhookHandlers(onCompleted: ...)` |
 | Rattraper un webhook manqué | `pay.getPaymentByReference(reference)` |
 | Savoir si on peut relancer | `onExpired`, ou `canRetry((await pay.getPayment(id)).status)` |
@@ -209,7 +211,7 @@ Attrapez `TechnasPayException` (`on TechnasPayException catch (e)`) et testez `e
 | `invalid_secret` | Variable absente ou mal copiée : demandez à l'utilisateur de la vérifier |
 | `invalid_api_key` | Secret refusé : contacter Technas |
 | `invalid_request` | Corriger le champ indiqué dans `e.errors` |
-| `invalid_amount`, `amount_too_low` | Montant `int` positif, assez grand pour couvrir les frais |
+| `invalid_amount`, `amount_too_low` | Montant `int` positif, assez grand pour couvrir les frais ; `amount_too_low` : `e.minimumAmount` |
 | `currency_not_enabled` | Devise non ouverte sur ce compte : contacter Technas |
 | `currency_conversion_unavailable` | Client hors zone CFA en mode `none` : ne pas proposer ce pays ; voir `getFxMode()` |
 | `country_not_allowed` | Le marchand ne vend pas dans ce pays : ne pas contourner |

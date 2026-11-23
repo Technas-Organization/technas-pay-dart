@@ -2,7 +2,7 @@
 
 Encaissez des paiements mobile money et par carte via Technas depuis un serveur Dart (shelf, Dart Frog, serverpod), et ouvrez la page de paiement depuis une app Flutter **sans jamais y mettre de clé**.
 
-**Technas Pay réunit le mobile money et la carte dans un seul SDK, du serveur jusqu'à l'app Flutter.** Carte : 1 % (plus les frais de votre compte carte, selon le pays : environ 1,5 % + 0,25 € en Europe). Mobile money : 2 % (les frais de l'opérateur sont payés par le client). Sans abonnement, et une clé de test sans papier pour commencer.
+**Technas Pay réunit le mobile money et la carte dans un seul SDK, du serveur jusqu'à l'app Flutter.** Carte : 1 % (plus les frais de votre compte carte, selon le pays : environ 1,5 % + 0,25 € en Europe). Mobile money : 2 %, et vous choisissez qui paie les frais : le client (vous recevez exactement votre prix) ou vous (le client paie votre prix) ; `pay.quote` dit les montants avant le paiement. Sans abonnement, et une clé de test sans papier pour commencer.
 
 Devises et pays, pièces demandées, versements, comparaison avec les autres prestataires : [le hub Technas Pay](https://github.com/Technas-Organization/technas-pay).
 
@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.8.0
+      ref: v0.9.0
 ```
 
 Sur le serveur, le secret remis par Technas va dans l'environnement :
@@ -56,6 +56,36 @@ order.paymentId = payment.id;
 ```
 
 Ne passez pas `currency` si vous vendez en francs CFA : la devise suit le pays du client (`customer['country']`), ou le client choisit son pays sur la page.
+
+### Qui paie les frais, et combien paie le client
+
+Deux modes, en mobile money (franc CFA). Le mode par défaut est celui de votre compte (demandez à Technas de le changer) ; chaque paiement peut le surcharger avec `fees`.
+
+| `fees` | Le client paie | Vous recevez |
+|---|---|---|
+| `'customer'` | votre prix + les frais du réseau de paiement + la commission Technas | **exactement votre prix** |
+| `'partner'` | **votre prix**, frais compris | votre prix − les frais |
+
+Pour savoir AVANT de créer le paiement combien le client paiera (le montant à lui afficher) et combien vous recevrez :
+
+```dart
+final q = await pay.quote(amount: 200, country: 'TG', fees: 'customer');
+q.customerTotal;   // 214 : ce que le client paie (à afficher)
+q.processingFee;   // 9   : frais du réseau de paiement
+q.commission;      // 5   : commission Technas (2 %)
+q.netAmount;       // 200 : ce que vous recevez
+q.networks;        // le détail réseau par réseau (Mixx by Yas, Moov Money…)
+
+final p = await pay.quote(amount: 1000, country: 'TG', fees: 'partner');
+// p.customerTotal 1000, p.processingFee 40, p.commission 20, p.netAmount 940
+```
+
+- `pay.getFees(...)` est le même appel que `pay.quote(...)`. Rien n'est créé.
+- Un paiement créé ensuite avec le même montant, le même pays et le même `fees` porte les mêmes montants : `payment.customerTotal`, `payment.processingFee`, `payment.netAmount`. `payment.amount` reste votre prix.
+- Les frais du réseau de paiement suivent la grille du réseau. Le client choisit son réseau sur la page de paiement : `customerTotal` est le plus haut des réseaux possibles, `networks[i].customerTotal` le montant exact de chacun.
+- L'opérateur du client (Mixx by Yas, Moov…) peut prendre ses propres frais sur le téléphone, en dehors de Technas : `networks[i].operatorFeeEstimate` en donne une estimation quand on la connaît (« environ »), jamais une promesse.
+- Montant trop petit : `amount_too_low` avec `e.minimumAmount` (`TechnasPayException`). Au Togo, le réseau n'accepte rien sous 200 F : en `'partner'`, 209 F au minimum ; en `'customer'`, 200 F passent.
+- Par carte, seulement `'partner'` : ajouter des frais au paiement par carte d'un consommateur est interdit en Europe. `pay.quote(amount: 20, method: 'card', currency: 'EUR')` rend la commission (`netAmount` null : les frais de la carte dépendent de la carte du client).
 
 ## 3. Serveur : recevoir le webhook
 
@@ -122,6 +152,7 @@ Côté serveur, renvoyez `payment.toAppJson()` : c'est le contrat qu'il lit.
 | `recordExternalRefund(paymentId, amount:, method:, note:?, recordedBy:?)` | Noter un remboursement fait hors Technas |
 | `getRefund(id)` | Statut d'un remboursement |
 | `topUpBalance(amount:, currency:, returnUrl:?)` | Recharger le solde |
+| `quote(amount:, country:?, network:?, currency:?, fees:?, method:?)`, `getFees(...)` | Devis : ce que le client paiera, ce que vous recevrez (rien n'est créé) |
 | `getBalance()`, `getSettlements()` | Solde par devise, reversements |
 | `WebhookHandlers(onSettlement:)` | Issue d'un reversement : avis `settlement.completed`, `settlement.failed` |
 | `getAccountKyc()` | Seuil d'identité : cumul, échéance, lien de la console |

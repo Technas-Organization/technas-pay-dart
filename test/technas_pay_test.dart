@@ -658,4 +658,181 @@ void main() {
       expect(seen, ['canceled/2026-11-16T09:00:00Z', 'timeout/null', 'null/null']);
     });
   });
+
+  group('qui paie les frais, et combien paie le client', () {
+    const devis = {
+      'method': 'mobile_money',
+      'currency': 'XOF',
+      'country': 'TG',
+      'fees_paid_by': 'customer',
+      'amount': 200,
+      'customer_amount': 205,
+      'customer_total': 214,
+      'processing_fee': 9,
+      'commission': 5,
+      'net_amount': 200,
+      'networks': [
+        {
+          'network': 'togocel',
+          'network_name': 'Mixx by Yas',
+          'customer_total': 214,
+          'processing_fee': 9,
+          'commission': 5,
+          'net_amount': 200,
+          'operator_fee_estimate': 10,
+          'otp_required': false,
+          'otp_instructions': null,
+        }
+      ],
+    };
+    const paye = {
+      'id': 'pay_1',
+      'reference': 'F-1',
+      'amount': 5000,
+      'currency': 'XOF',
+      'commission': 100,
+      'net_amount': 4900,
+      'status': 'pending',
+      'checkout_url': 'https://pay.technas.fr/c/1',
+    };
+
+    (TechnasPay, List<http.Request>) client(List<(int, Object)> replies) {
+      final calls = <http.Request>[];
+      final p = TechnasPay(
+        secret: secret,
+        baseUrl: base,
+        httpClient: MockClient((r) async {
+          calls.add(r);
+          final (status, body) = replies.removeAt(0);
+          return http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
+        }),
+      );
+      return (p, calls);
+    }
+
+    test('fees envoyé seulement s\'il est donné ; customerAmount, feesPaidBy, customerTotal, processingFee lus (défauts compris)',
+        () async {
+      final (p, calls) = client([
+        (201, paye),
+        (201, paye),
+        (
+          200,
+          {
+            ...paye,
+            'amount': 200,
+            'customer_amount': 205,
+            'net_amount': 200,
+            'commission': 5,
+            'fees_paid_by': 'customer',
+            'customer_total': 214,
+            'processing_fee': 9,
+          }
+        ),
+      ]);
+      final a = await p.askForPayment(amount: 5000, reference: 'F-1', customer: customer, returnUrl: 'https://p.test', fees: 'customer');
+      expect((jsonDecode(calls[0].body) as Map)['fees'], 'customer');
+      // Serveur plus ancien : customer_amount absent → amount, fees_paid_by absent → partner, le reste null.
+      expect([a.customerAmount, a.feesPaidBy, a.customerTotal, a.processingFee], [5000, 'partner', null, null]);
+      await p.askForPayment(amount: 5000, reference: 'F-2', customer: customer, returnUrl: 'https://p.test');
+      expect((jsonDecode(calls[1].body) as Map).containsKey('fees'), isFalse);
+      final lu = await p.getPayment('pay_1');
+      expect([lu.amount, lu.customerAmount, lu.netAmount, lu.feesPaidBy, lu.customerTotal, lu.processingFee],
+          [200, 205, 200, 'customer', 214, 9]);
+      expect(() => p.askForPayment(amount: 5000, reference: 'F-3', customer: customer, returnUrl: 'https://p.test', fees: 'client'),
+          throwsA(isA<TechnasPayException>().having((e) => e.code, 'code', 'invalid_request').having((e) => e.status, 'status', 0)));
+      expect(calls, hasLength(3));
+    });
+
+    test('quote et getFees envoient le montant, le pays et le mode, et lisent chaque réseau', () async {
+      final (p, calls) = client([
+        (200, devis),
+        (200, devis),
+        (
+          200,
+          {
+            'method': 'card',
+            'currency': 'EUR',
+            'country': null,
+            'fees_paid_by': 'partner',
+            'amount': 20,
+            'customer_amount': 20,
+            'customer_total': 20,
+            'processing_fee': null,
+            'commission': 0.2,
+            'net_amount': null,
+            'networks': <Object>[],
+          }
+        ),
+      ]);
+      final q = await p.quote(amount: 200, country: 'tg', fees: 'customer');
+      expect(calls[0].method, 'POST');
+      expect(calls[0].url.toString(), '$base/v1/quotes');
+      expect(calls[0].headers['Authorization'], 'Bearer $apiKey');
+      expect(jsonDecode(calls[0].body), {'amount': 200, 'country': 'TG', 'fees': 'customer'});
+      expect(
+          [q.customerTotal, q.processingFee, q.commission, q.netAmount, q.feesPaidBy, q.customerAmount], [214, 9, 5, 200, 'customer', 205]);
+      final n = q.networks.single;
+      expect([
+        n.network,
+        n.networkName,
+        n.customerTotal,
+        n.processingFee,
+        n.commission,
+        n.netAmount,
+        n.operatorFeeEstimate,
+        n.otpRequired,
+        n.otpInstructions
+      ], [
+        'togocel',
+        'Mixx by Yas',
+        214,
+        9,
+        5,
+        200,
+        10,
+        false,
+        null
+      ]);
+      await p.getFees(amount: 1000, country: 'TG', network: 'togocel');
+      expect(jsonDecode(calls[1].body), {'amount': 1000, 'country': 'TG', 'network': 'togocel'});
+      final carte = await p.quote(amount: 20, method: 'card', currency: 'eur');
+      expect(jsonDecode(calls[2].body), {'amount': 20, 'method': 'card', 'currency': 'EUR'});
+      expect([carte.processingFee, carte.netAmount, carte.networks, carte.customerTotal], [null, null, isEmpty, 20]);
+      for (final bad in [
+        () => p.quote(amount: 0),
+        () => p.quote(amount: 200, fees: 'client'),
+        () => p.quote(amount: 200, method: 'cash'),
+      ]) {
+        await expectLater(bad, throwsA(isA<TechnasPayException>().having((e) => e.status, 'status', 0)));
+      }
+      expect(calls, hasLength(3));
+    });
+
+    test('amount_too_low rend le minimum', () async {
+      final (p, _) = client([
+        (422, {'code': 'amount_too_low', 'message': 'trop petit', 'minimum_amount': 209}),
+      ]);
+      await expectLater(
+          p.quote(amount: 200, country: 'TG', fees: 'partner'),
+          throwsA(isA<TechnasPayException>()
+              .having((e) => e.code, 'code', 'amount_too_low')
+              .having((e) => e.status, 'status', 422)
+              .having((e) => e.minimumAmount, 'minimumAmount', 209)));
+    });
+
+    test('avis payment.* : qui paie les frais et le total du client (défauts sur un avis ancien)', () async {
+      final seen = <EventPayment>[];
+      final h = WebhookHandlers(onCompleted: (e) => seen.add(e.payment!));
+      const base_ = {'id': 'p', 'reference': 'F-1', 'status': 'completed', 'amount': 200, 'currency': 'XOF'};
+      for (final data in [
+        {...base_, 'customer_amount': 205, 'fees_paid_by': 'customer', 'customer_total': 214, 'processing_fee': 9},
+        base_,
+      ]) {
+        final body = jsonEncode({'id': 'e', 'type': 'payment.completed', 'created_at': 'x', 'data': data});
+        expect((await pay.handleWebhook(body, sign(body, webhookSecret), h)).status, 200);
+      }
+      expect([seen[0].customerAmount, seen[0].feesPaidBy, seen[0].customerTotal, seen[0].processingFee], [205, 'customer', 214, 9]);
+      expect([seen[1].customerAmount, seen[1].feesPaidBy, seen[1].customerTotal, seen[1].processingFee], [200, 'partner', null, null]);
+    });
+  });
 }

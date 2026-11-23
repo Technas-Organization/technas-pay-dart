@@ -20,6 +20,7 @@ class TechnasPayException implements Exception {
     this.accountStatus,
     this.consoleUrl,
     this.version,
+    this.minimumAmount,
   });
 
   factory TechnasPayException.fromResponse(int status, Object? data) {
@@ -40,6 +41,7 @@ class TechnasPayException implements Exception {
       accountStatus: pick<String>('account_status'),
       consoleUrl: pick<String>('console_url'),
       version: pick<String>('version'),
+      minimumAmount: pick<num>('minimum_amount'),
     );
   }
 
@@ -70,6 +72,9 @@ class TechnasPayException implements Exception {
 
   /// `contract_required` : la version du contrat à accepter dans la console.
   final String? version;
+
+  /// `amount_too_low` : le plus petit montant possible (minimum du réseau, frais compris).
+  final num? minimumAmount;
 
   bool get retryable => code == 'network_error' || code == 'payment_in_progress' || status == 429 || status >= 500;
 

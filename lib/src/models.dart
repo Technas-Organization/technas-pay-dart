@@ -49,11 +49,30 @@ class Payment {
         expiredAt = j['expired_at'] as String?,
         canceledAt = j['canceled_at'] as String?,
         cancelReason = j['cancel_reason'] as String?,
-        reason = j['reason'] as String?;
+        reason = j['reason'] as String?,
+        customerAmount = (j['customer_amount'] as num?) ?? j['amount'] as num,
+        feesPaidBy = (j['fees_paid_by'] as String?) ?? 'partner',
+        customerTotal = j['customer_total'] as num?,
+        processingFee = j['processing_fee'] as num?;
 
   final String id;
   final String reference;
+
+  /// VOTRE prix : comparez-le à votre facture.
   final num amount;
+
+  /// Ce que Technas demande au réseau de paiement, avant ses frais (= [amount] sauf frais au client).
+  final num customerAmount;
+
+  /// Qui a payé les frais : `partner` ou `customer`.
+  final String feesPaidBy;
+
+  /// Ce que le client paie, frais du réseau de paiement compris (le plus haut des réseaux tant
+  /// qu'il n'a pas choisi le sien). `null` : inconnu (carte, hors franc CFA, serveur ancien).
+  final num? customerTotal;
+
+  /// Les frais du réseau de paiement dans [customerTotal].
+  final num? processingFee;
 
   /// `null` tant que le payeur n'a pas choisi son pays sur la page de paiement.
   final String? currency;
@@ -104,6 +123,90 @@ class Payment {
         'expires_at': expiresAt,
         'method': method,
       };
+}
+
+/// Un réseau du devis : ce que le client paie s'il paie avec lui.
+class QuoteNetwork {
+  QuoteNetwork.fromJson(Json j)
+      : network = j['network'] as String,
+        networkName = (j['network_name'] as String?) ?? j['network'] as String,
+        customerTotal = j['customer_total'] as num,
+        processingFee = j['processing_fee'] as num,
+        commission = j['commission'] as num,
+        netAmount = j['net_amount'] as num,
+        operatorFeeEstimate = j['operator_fee_estimate'] as num?,
+        otpRequired = j['otp_required'] == true,
+        otpInstructions = j['otp_instructions'] as String?;
+
+  /// Code du réseau (ex. `togocel`).
+  final String network;
+
+  /// Le nom que le client connaît (ex. « Mixx by Yas »).
+  final String networkName;
+
+  /// Ce que le client paie, frais du réseau de paiement compris : le montant à afficher.
+  final num customerTotal;
+
+  /// Les frais du réseau de paiement dans [customerTotal].
+  final num processingFee;
+
+  /// La commission Technas.
+  final num commission;
+
+  /// Ce que vous recevez.
+  final num netAmount;
+
+  /// Les frais propres de l'opérateur du client, prélevés sur son téléphone EN PLUS, hors Technas :
+  /// une estimation (« environ »), jamais promise. `null` : inconnus.
+  final num? operatorFeeEstimate;
+
+  /// Le client doit obtenir un code sur son téléphone avant de payer ([otpInstructions]).
+  final bool otpRequired;
+  final String? otpInstructions;
+}
+
+/// Le devis d'un paiement (`quote`, `getFees`) : rien n'est créé.
+class Quote {
+  Quote.fromJson(Json j)
+      : method = (j['method'] as String?) ?? 'mobile_money',
+        currency = j['currency'] as String,
+        country = j['country'] as String?,
+        feesPaidBy = (j['fees_paid_by'] as String?) ?? 'partner',
+        amount = j['amount'] as num,
+        customerAmount = (j['customer_amount'] as num?) ?? j['amount'] as num,
+        customerTotal = (j['customer_total'] as num?) ?? j['amount'] as num,
+        processingFee = j['processing_fee'] as num?,
+        commission = (j['commission'] as num?) ?? 0,
+        netAmount = j['net_amount'] as num?,
+        networks = _list(j['networks']).map(QuoteNetwork.fromJson).toList();
+
+  /// `mobile_money` ou `card`.
+  final String method;
+  final String currency;
+  final String? country;
+
+  /// Qui paie les frais : `partner` ou `customer`.
+  final String feesPaidBy;
+
+  /// Votre prix.
+  final num amount;
+
+  /// Ce que Technas demande au réseau de paiement (avant ses frais).
+  final num customerAmount;
+
+  /// Ce que le client paie, frais du réseau compris (le plus haut des réseaux possibles) : le
+  /// montant à afficher. Par carte : [amount] (les frais de la carte sont pris sur votre compte carte).
+  final num customerTotal;
+
+  /// Les frais du réseau de paiement (le plus haut des réseaux) ; `null` par carte.
+  final num? processingFee;
+  final num commission;
+
+  /// Ce que vous recevez ; `null` par carte (dépend de la carte du client).
+  final num? netAmount;
+
+  /// Réseau par réseau (mobile money) ; vide par carte.
+  final List<QuoteNetwork> networks;
 }
 
 class TransactionPage {

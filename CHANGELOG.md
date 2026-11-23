@@ -1,3 +1,11 @@
+## 0.9.0 — 2026-11-23
+
+- Qui paie les frais, et combien paie le client : `pay.quote(amount: ..., country: ?, network: ?, currency: ?, fees: ?, method: ?)` (`POST /v1/quotes`), et son alias `pay.getFees` → `Quote` : `customerTotal` (ce que le client paie, à afficher), `processingFee` (frais du réseau de paiement), `commission`, `netAmount` (ce que vous recevez), `networks` (`QuoteNetwork`, réseau par réseau, avec `operatorFeeEstimate`, une estimation des frais propres de l'opérateur, jamais promise). Rien n'est créé.
+- `askForPayment(..., fees: 'customer')` : le client paie TOUS les frais (réseau de paiement + commission), vous recevez exactement `amount`. `fees: 'partner'` : le client paie `amount`, frais compris. Sans `fees` : le réglage de votre compte. Par carte, seulement `'partner'` (`fees_customer_unavailable`).
+- `Payment` et l'avis `EventPayment` : `customerAmount` (ce que Technas demande au réseau de paiement, `amount` sur un serveur ancien), `feesPaidBy` (`partner` sur un serveur ancien), `customerTotal` et `processingFee` (`null` sur un serveur ancien). `amount` reste VOTRE prix.
+- `amount_too_low` : `TechnasPayException.minimumAmount`.
+- `technas_pay_flutter` inchangé (0.4.1).
+
 ## 0.8.0 — 2026-11-19
 
 - Avis de reversement : `settlement.completed` et `settlement.failed` (l'issue d'un reversement de votre solde vers votre numéro mobile money) arrivent dans `WebhookHandlers(onSettlement:)`, contenu typé `event.settlement` (`SettlementNotice`) : `id`, `amount` (ce qui a quitté le solde), `fee` (frais du versement, à votre charge), `netAmount` (ce qui arrive sur le numéro), `currency`, `status` (`completed` | `failed`), `createdAt`. Tous facultatifs : un champ absent se lit `null`. Sur `settlement.failed`, `amount` est recrédité sur le solde. Avant, ces deux avis n'appelaient aucune fonction.

@@ -10,7 +10,7 @@ import 'models.dart';
 import 'status.dart';
 import 'webhooks.dart';
 
-const _version = '0.8.1';
+const _version = '0.9.0';
 const defaultBaseUrl = 'https://pay-api.technas.fr';
 const secretEnv = 'TECHNAS_PAY_SECRET';
 
@@ -29,6 +29,12 @@ class _Secret {
 void _positiveAmount(num amount) {
   if (amount.isNaN || amount.isInfinite || amount <= 0) {
     throw TechnasPayException('invalid_amount', 'amount doit être positif (5000 = 5 000 FCFA, 12.5 = 12,50 €)');
+  }
+}
+
+void _checkFees(String? fees) {
+  if (fees != null && fees != 'partner' && fees != 'customer') {
+    throw TechnasPayException('invalid_request', 'fees vaut "partner" ou "customer"');
   }
 }
 
@@ -143,6 +149,11 @@ class TechnasPay {
   ///
   /// [method] : `mobile_money` (défaut) ou `card` (exige [currency], un compte carte actif, et
   /// permet les décimales : 12.5 = 12,50 €).
+  ///
+  /// [fees] (mobile money en franc CFA) : `customer`, le client paie tout, frais du réseau de
+  /// paiement ET commission Technas, et vous recevez EXACTEMENT [amount] ; `partner`, le client paie
+  /// [amount], frais compris. Absent : le réglage de votre compte. Montants avant de créer le
+  /// paiement : [quote]. Par carte, seulement `partner` (`fees_customer_unavailable`).
   Future<Payment> askForPayment({
     required num amount,
     required String reference,
@@ -155,10 +166,12 @@ class TechnasPay {
     List<String>? allowedCountries,
     List<String>? excludedCountries,
     bool askCountry = false,
+    String? fees,
   }) {
     if (method != 'mobile_money' && method != 'card') {
       throw TechnasPayException('invalid_request', 'method vaut "mobile_money" ou "card"');
     }
+    _checkFees(fees);
     method == 'card' ? _positiveAmount(amount) : _positiveInt(amount);
     var resolved = currency?.trim().toUpperCase();
     if (resolved == null || resolved.isEmpty) {
@@ -180,8 +193,43 @@ class TechnasPay {
       if (allowedCountries != null) 'allowed_countries': allowedCountries,
       if (excludedCountries != null) 'excluded_countries': excludedCountries,
       if (askCountry) 'ask_country': true,
+      if (fees != null) 'fees': fees,
     });
   }
+
+  /// Le devis : pour un montant, ce que le client paiera (`customerTotal`, à afficher) et ce que
+  /// vous recevrez (`netAmount`), réseau par réseau. Ne crée aucun paiement ; un paiement créé
+  /// ensuite avec le même montant, le même pays et le même [fees] rend les mêmes montants.
+  ///
+  /// ```dart
+  /// final q = await pay.quote(amount: 200, country: 'TG', fees: 'customer');
+  /// q.customerTotal; // 214 : le client paie 214, vous recevez 200
+  /// ```
+  ///
+  /// [method] : `mobile_money` (défaut) ou `card` ; [country] : pays du client (sans lui, tous les
+  /// pays de la devise) ; [network] : un réseau précis ; [currency] : sans [country], `XOF` ou `XAF`
+  /// (obligatoire par carte) ; [fees] : `partner` ou `customer` (absent : le réglage de votre compte).
+  Future<Quote> quote({required num amount, String? method, String? country, String? network, String? currency, String? fees}) async {
+    _positiveAmount(amount);
+    if (method != null && method != 'mobile_money' && method != 'card') {
+      throw TechnasPayException('invalid_request', 'method vaut "mobile_money" ou "card"');
+    }
+    _checkFees(fees);
+    final c = country?.trim().toUpperCase();
+    final cur = currency?.trim().toUpperCase();
+    return _call('POST', '/v1/quotes', (d) => Quote.fromJson(d as Json), {
+      'amount': amount,
+      if (method != null) 'method': method,
+      if (c != null && c.isNotEmpty) 'country': c,
+      if (network != null && network.isNotEmpty) 'network': network,
+      if (cur != null && cur.isNotEmpty) 'currency': cur,
+      if (fees != null) 'fees': fees,
+    });
+  }
+
+  /// Même chose que [quote] : combien le client paiera, combien vous recevrez.
+  Future<Quote> getFees({required num amount, String? method, String? country, String? network, String? currency, String? fees}) =>
+      quote(amount: amount, method: method, country: country, network: network, currency: currency, fees: fees);
 
   Future<Payment> getPayment(String id) async => _call('GET', '/v1/payments/${_seg(id)}', (d) => Payment.fromJson(d as Json));
 

@@ -33,12 +33,28 @@ class EventPayment {
         expiredAt = d['expired_at'] as String?,
         reason = d['reason'] as String?,
         canceledAt = d['canceled_at'] as String?,
-        cancelReason = d['cancel_reason'] as String?;
+        cancelReason = d['cancel_reason'] as String?,
+        customerAmount = (d['customer_amount'] as num?) ?? d['amount'] as num,
+        feesPaidBy = (d['fees_paid_by'] as String?) ?? 'partner',
+        customerTotal = d['customer_total'] as num?,
+        processingFee = d['processing_fee'] as num?;
 
   final String id;
   final String reference;
   final String status;
   final num amount;
+
+  /// Ce que Technas a demandé au réseau de paiement, avant ses frais (= [amount] sauf frais au client).
+  final num customerAmount;
+
+  /// Qui a payé les frais : `partner` ou `customer`.
+  final String feesPaidBy;
+
+  /// Ce que le client a payé, frais du réseau de paiement compris (`null` : inconnu).
+  final num? customerTotal;
+
+  /// Les frais du réseau de paiement dans [customerTotal].
+  final num? processingFee;
   final String? currency;
   final num commission;
   final num netAmount;

@@ -10,6 +10,8 @@ Le client change d'offre ou revient plus tard : `cancelPayment(ancienId)` puis n
 
 Reversements : avis `settlement.completed` et `settlement.failed` dans `WebhookHandlers(onSettlement:)`, contenu `event.settlement` (`SettlementNotice` : `amount` quitté du solde, `fee` à votre charge, `netAmount` reçu sur le numéro, `currency`, `status`) ; sur `settlement.failed`, `amount` est recrédité sur le solde.
 
+Frais : `fees: 'customer'` (le client paie frais du réseau + commission ; vous recevez exactement `amount`) ou `'partner'` (le client paie `amount`, frais compris). Devis avant paiement : `pay.quote(amount: ..., country: ..., fees: ?)` / `pay.getFees` → `customerTotal` (à afficher), `processingFee`, `commission`, `netAmount`, `networks` (dont `operatorFeeEstimate`, « environ »). `amount_too_low` → `TechnasPayException.minimumAmount`. Carte : `'partner'` seulement.
+
 - [AGENTS.md](AGENTS.md) : règles pour un agent de code
 - [README.md](README.md) : guide complet, serveur et Flutter
 - [lib/src/client.dart](lib/src/client.dart) : chaque méthode et sa documentation
