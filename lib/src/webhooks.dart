@@ -37,7 +37,8 @@ class EventPayment {
         customerAmount = (d['customer_amount'] as num?) ?? d['amount'] as num,
         feesPaidBy = (d['fees_paid_by'] as String?) ?? 'partner',
         customerTotal = d['customer_total'] as num?,
-        processingFee = d['processing_fee'] as num?;
+        processingFee = d['processing_fee'] as num?,
+        network = d['network'] as String?;
 
   final String id;
   final String reference;
@@ -55,6 +56,9 @@ class EventPayment {
 
   /// Les frais du réseau de paiement dans [customerTotal].
   final num? processingFee;
+
+  /// Le réseau avec lequel le client a payé ([Network], ex. `mixx`) ; `null` sinon.
+  final String? network;
   final String? currency;
   final num commission;
   final num netAmount;

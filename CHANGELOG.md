@@ -1,3 +1,13 @@
+## 0.10.0 — 2026-11-23
+
+- Les moyens et les réseaux, en listes fermées : constantes `paymentMethods` et `networks` (aussi `PaymentMethod.all`, `Network.all`), une constante par valeur (`PaymentMethod.mobileMoney`, `PaymentMethod.card`, `Network.mixx` pour Mixx by Yas, `Network.moov` pour Moov Money / Flooz, `Network.mtnMomo`, `Network.orangeMoney`, `Network.wave`…). Exportées aussi par `package:technas_pay/app.dart`.
+- `pay.getPaymentMethods([country])` (moyens et réseaux ouverts, `enabled`, votre ordre) et `pay.setPaymentMethods(methods: ?, networks: ?, networkOrder: ?, allMethods: ?, allNetworks: ?)` → `PaymentMethods` (`methods` : `MethodSetting`, `networks` : `NetworkSetting`, `networkOrder`). Un champ absent ne change pas ; `allNetworks: true` = tous les réseaux.
+- `askForPayment(..., networks: [...])` : les réseaux permis pour un paiement (envoyé seulement s'il n'est pas vide ; une valeur hors de `networks` est refusée avant tout appel).
+- `Payment.network` (réseau avec lequel le client a payé), `Payment.networks`, `EventPayment.network` (`null` sur un serveur ancien).
+- Nouveaux refus : `method_not_enabled`, `network_not_enabled`, `network_not_available` (422).
+- ⚠️ `quote()` : `networks[i].network` vaut maintenant un réseau de `networks` (`'mixx'`, `'moov'`) au lieu d'un code technique (`'togocel'`, `'moov_tg'`). En entrée, `quote(network: 'togocel')` reste accepté et vise `'mixx'`. Un réseau plus récent que ce SDK est gardé tel quel.
+- `technas_pay_flutter` inchangé (0.4.1).
+
 ## 0.9.0 — 2026-11-23
 
 - Qui paie les frais, et combien paie le client : `pay.quote(amount: ..., country: ?, network: ?, currency: ?, fees: ?, method: ?)` (`POST /v1/quotes`), et son alias `pay.getFees` → `Quote` : `customerTotal` (ce que le client paie, à afficher), `processingFee` (frais du réseau de paiement), `commission`, `netAmount` (ce que vous recevez), `networks` (`QuoteNetwork`, réseau par réseau, avec `operatorFeeEstimate`, une estimation des frais propres de l'opérateur, jamais promise). Rien n'est créé.

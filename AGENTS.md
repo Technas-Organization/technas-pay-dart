@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.9.0
+      ref: v0.10.0
 ```
 
 ## Quelle méthode pour quoi
@@ -37,6 +37,8 @@ dependencies:
 | Faire payer une commande | `pay.askForPayment(amount: ..., reference: retryReference(orderId, attempt), customer: {'email': ..., 'name': ...}, returnUrl: ...)`, puis rendre `payment.checkoutUrl` à l'app ou rediriger (303) |
 | Savoir combien le client paiera et combien vous recevrez, avant de créer le paiement | `pay.quote(amount: ..., country: ..., fees: ?)` (ou `pay.getFees`) → `customerTotal` (à afficher au client), `processingFee`, `commission`, `netAmount`, `networks` |
 | Faire payer TOUS les frais au client (vous recevez exactement `amount`) | `fees: 'customer'` dans `askForPayment` (ou réglage du compte) ; `'partner'` : le client paie `amount`, frais compris |
+| Lister les moyens et réseaux ouverts, ce qui est activé, l'ordre | `pay.getPaymentMethods(country)` ; constantes `paymentMethods`, `networks` (une constante par valeur : `PaymentMethod.card`, `Network.mixx`…) |
+| Activer / éteindre des moyens et réseaux, fixer l'ordre d'affichage | `pay.setPaymentMethods(methods: ?, networks: ?, networkOrder: ?)` ; par paiement : `networks: [...]` dans `askForPayment` |
 | Savoir qu'elle est payée | webhook, `WebhookHandlers(onCompleted: ...)` |
 | Rattraper un webhook manqué | `pay.getPaymentByReference(reference)` |
 | Savoir si on peut relancer | `onExpired`, ou `canRetry((await pay.getPayment(id)).status)` |
@@ -215,6 +217,9 @@ Attrapez `TechnasPayException` (`on TechnasPayException catch (e)`) et testez `e
 | `currency_not_enabled` | Devise non ouverte sur ce compte : contacter Technas |
 | `currency_conversion_unavailable` | Client hors zone CFA en mode `none` : ne pas proposer ce pays ; voir `getFxMode()` |
 | `country_not_allowed` | Le marchand ne vend pas dans ce pays : ne pas contourner |
+| `method_not_enabled` | Moyen éteint sur ce compte : ne pas le proposer ; voir `getPaymentMethods()` |
+| `network_not_enabled` | Réseau éteint sur ce compte : ne pas le proposer ; voir `getPaymentMethods()` |
+| `network_not_available` | Réseau pas ouvert dans ce pays : ne pas le proposer ; voir `getPaymentMethods(country)` |
 | `country_not_available` | Pays pas prêt : `e.reason` |
 | `risk_not_accepted` | Montrer `e.risk` à l'utilisateur ; n'activer qu'avec son accord explicite |
 | `fx_mode_unavailable`, `fx_channel_unavailable` | `converted` pas ouvert : proposer `local` (avec accord) ou rester en `none` |

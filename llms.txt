@@ -12,6 +12,8 @@ Reversements : avis `settlement.completed` et `settlement.failed` dans `WebhookH
 
 Frais : `fees: 'customer'` (le client paie frais du réseau + commission ; vous recevez exactement `amount`) ou `'partner'` (le client paie `amount`, frais compris). Devis avant paiement : `pay.quote(amount: ..., country: ..., fees: ?)` / `pay.getFees` → `customerTotal` (à afficher), `processingFee`, `commission`, `netAmount`, `networks` (dont `operatorFeeEstimate`, « environ »). `amount_too_low` → `TechnasPayException.minimumAmount`. Carte : `'partner'` seulement.
 
+Moyens et réseaux : constantes `paymentMethods` (`mobile_money`, `card`) et `networks` (`mixx`, `moov`, `mtn_momo`, `orange_money`, `wave`…), une constante par valeur dans `PaymentMethod` et `Network`. `pay.getPaymentMethods(country)`, `pay.setPaymentMethods(methods: ?, networks: ?, networkOrder: ?)`, `networks: [...]` par paiement ; `payment.network` une fois payé. Refus : `method_not_enabled`, `network_not_enabled`, `network_not_available`.
+
 - [AGENTS.md](AGENTS.md) : règles pour un agent de code
 - [README.md](README.md) : guide complet, serveur et Flutter
 - [lib/src/client.dart](lib/src/client.dart) : chaque méthode et sa documentation

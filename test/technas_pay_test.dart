@@ -673,7 +673,7 @@ void main() {
       'net_amount': 200,
       'networks': [
         {
-          'network': 'togocel',
+          'network': 'mixx',
           'network_name': 'Mixx by Yas',
           'customer_total': 214,
           'processing_fee': 9,
@@ -783,7 +783,7 @@ void main() {
         n.otpRequired,
         n.otpInstructions
       ], [
-        'togocel',
+        'mixx',
         'Mixx by Yas',
         214,
         9,
@@ -833,6 +833,157 @@ void main() {
       }
       expect([seen[0].customerAmount, seen[0].feesPaidBy, seen[0].customerTotal, seen[0].processingFee], [205, 'customer', 214, 9]);
       expect([seen[1].customerAmount, seen[1].feesPaidBy, seen[1].customerTotal, seen[1].processingFee], [200, 'partner', null, null]);
+    });
+  });
+  group('moyens et réseaux', () {
+    const moyens = {
+      'methods': [
+        {'method': 'mobile_money', 'enabled': true},
+        {'method': 'card', 'enabled': false},
+      ],
+      'networks': [
+        {'network': 'mixx', 'name': 'Mixx by Yas', 'country': 'TG', 'currency': 'XOF', 'enabled': true},
+        {'network': 'moov', 'name': 'Moov Money', 'country': 'TG', 'currency': 'XOF', 'enabled': false},
+      ],
+      'network_order': ['mixx', 'moov'],
+      'all_networks': ['mixx', 'moov'],
+    };
+    const paye = {
+      'id': 'pay_1',
+      'reference': 'F-1',
+      'amount': 5000,
+      'currency': 'XOF',
+      'commission': 100,
+      'net_amount': 4900,
+      'status': 'pending',
+      'checkout_url': 'https://pay.technas.fr/c/1',
+    };
+
+    (TechnasPay, List<http.Request>) client(List<(int, Object)> replies) {
+      final calls = <http.Request>[];
+      final p = TechnasPay(
+        secret: secret,
+        baseUrl: base,
+        httpClient: MockClient((r) async {
+          calls.add(r);
+          final (status, body) = replies.removeAt(0);
+          return http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
+        }),
+      );
+      return (p, calls);
+    }
+
+    final refuse =
+        throwsA(isA<TechnasPayException>().having((e) => e.code, 'code', 'invalid_request').having((e) => e.status, 'status', 0));
+
+    test('énumérations fermées, dans l\'ordre du serveur', () {
+      expect(paymentMethods, ['mobile_money', 'card']);
+      expect(networks, hasLength(23));
+      expect([networks.first, networks[1], networks.last], [Network.mixx, Network.moov, Network.tpesa]);
+      expect(networks, isNot(contains('togocel')));
+      expect(Network.orangeMoney, 'orange_money');
+      expect(PaymentMethod.mobileMoney, 'mobile_money');
+    });
+
+    test('networks envoyé par paiement s\'il n\'est pas vide ; network et networks lus ; valeurs inconnues refusées', () async {
+      final (p, calls) = client([
+        (
+          201,
+          {
+            ...paye,
+            'networks': ['mixx', 'moov']
+          }
+        ),
+        (201, paye),
+        (200, {...paye, 'status': 'completed', 'network': 'mixx'}),
+      ]);
+      final a = await p.askForPayment(
+          amount: 5000, reference: 'F-1', customer: customer, returnUrl: 'https://p.test', networks: [Network.mixx, Network.moov]);
+      expect((jsonDecode(calls[0].body) as Map)['networks'], ['mixx', 'moov']);
+      expect([
+        a.network,
+        a.networks
+      ], [
+        null,
+        ['mixx', 'moov']
+      ]);
+      final b = await p.askForPayment(amount: 5000, reference: 'F-2', customer: customer, returnUrl: 'https://p.test', networks: []);
+      expect((jsonDecode(calls[1].body) as Map).containsKey('networks'), isFalse);
+      // Serveur ancien : ni network ni networks.
+      expect([b.network, b.networks], [null, null]);
+      final lu = await p.getPayment('pay_1');
+      expect([lu.network, lu.networks], ['mixx', null]);
+      expect(() => p.askForPayment(amount: 5000, reference: 'F-3', customer: customer, returnUrl: 'https://p.test', networks: ['togocel']),
+          refuse);
+      expect(calls, hasLength(3));
+    });
+
+    test('getPaymentMethods et setPaymentMethods', () async {
+      final (p, calls) = client([(200, moyens), (200, moyens), (200, moyens), (200, moyens)]);
+      final m = await p.getPaymentMethods('tg');
+      expect(calls[0].method, 'GET');
+      expect(calls[0].url.toString(), '$base/v1/payment-methods?country=TG');
+      expect(m.methods.map((x) => '${x.method}/${x.enabled}'), ['mobile_money/true', 'card/false']);
+      final n = m.networks.first;
+      expect(
+          [n.network, n.name, n.country, n.currency, n.enabled, m.networks[1].enabled], ['mixx', 'Mixx by Yas', 'TG', 'XOF', true, false]);
+      expect(m.networkOrder, ['mixx', 'moov']);
+      await p.getPaymentMethods();
+      expect(calls[1].url.toString(), '$base/v1/payment-methods');
+      await p.setPaymentMethods(methods: [PaymentMethod.mobileMoney], networkOrder: [Network.mixx, Network.moov]);
+      expect(calls[2].method, 'PUT');
+      expect(jsonDecode(calls[2].body), {
+        'methods': ['mobile_money'],
+        'network_order': ['mixx', 'moov'],
+      });
+      await p.setPaymentMethods(allNetworks: true);
+      expect(jsonDecode(calls[3].body), {'networks': null});
+      expect(() => p.setPaymentMethods(methods: ['cash']), refuse);
+      expect(() => p.setPaymentMethods(networks: ['togocel']), refuse);
+      expect(() => p.setPaymentMethods(networkOrder: ['mixx', 'flooz']), refuse);
+      expect(() => p.setPaymentMethods(networks: ['mixx'], allNetworks: true), refuse);
+      expect(calls, hasLength(4));
+    });
+
+    test('devis : un réseau inconnu de ce SDK est gardé tel quel', () async {
+      final (p, _) = client([
+        (
+          200,
+          {
+            'currency': 'XOF',
+            'amount': 200,
+            'networks': [
+              {'network': 'nouveau_reseau', 'customer_total': 214, 'processing_fee': 9, 'commission': 5, 'net_amount': 200},
+            ],
+          }
+        ),
+      ]);
+      expect((await p.quote(amount: 200, country: 'TG')).networks.single.network, 'nouveau_reseau');
+    });
+
+    for (final code in ['method_not_enabled', 'network_not_enabled', 'network_not_available']) {
+      test('refus $code', () async {
+        final (p, _) = client([
+          (422, {'code': code, 'message': 'refusé'}),
+        ]);
+        await expectLater(
+            p.askForPayment(amount: 5000, reference: 'F-1', customer: customer, returnUrl: 'https://p.test', networks: [Network.mixx]),
+            throwsA(isA<TechnasPayException>().having((e) => e.code, 'code', code).having((e) => e.status, 'status', 422)));
+      });
+    }
+
+    test('avis payment.* : le réseau payé', () async {
+      final seen = <EventPayment>[];
+      final h = WebhookHandlers(onCompleted: (e) => seen.add(e.payment!));
+      const base_ = {'id': 'p', 'reference': 'F-1', 'status': 'completed', 'amount': 200, 'currency': 'XOF'};
+      for (final data in [
+        {...base_, 'network': 'mixx'},
+        base_,
+      ]) {
+        final body = jsonEncode({'id': 'e', 'type': 'payment.completed', 'created_at': 'x', 'data': data});
+        expect((await pay.handleWebhook(body, sign(body, webhookSecret), h)).status, 200);
+      }
+      expect(seen.map((e) => e.network), ['mixx', null]);
     });
   });
 }

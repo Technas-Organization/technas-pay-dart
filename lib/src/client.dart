@@ -10,7 +10,7 @@ import 'models.dart';
 import 'status.dart';
 import 'webhooks.dart';
 
-const _version = '0.9.0';
+const _version = '0.10.0';
 const defaultBaseUrl = 'https://pay-api.technas.fr';
 const secretEnv = 'TECHNAS_PAY_SECRET';
 
@@ -35,6 +35,18 @@ void _positiveAmount(num amount) {
 void _checkFees(String? fees) {
   if (fees != null && fees != 'partner' && fees != 'customer') {
     throw TechnasPayException('invalid_request', 'fees vaut "partner" ou "customer"');
+  }
+}
+
+void _checkNetworks(List<String>? values, [String name = 'networks']) {
+  if (values != null && values.any((n) => !Network.all.contains(n))) {
+    throw TechnasPayException('invalid_request', '$name : des réseaux de Network.all (mixx, moov, mtn_momo…)');
+  }
+}
+
+void _checkMethods(List<String>? values) {
+  if (values != null && values.any((m) => !PaymentMethod.all.contains(m))) {
+    throw TechnasPayException('invalid_request', 'methods : "mobile_money" et "card"');
   }
 }
 
@@ -154,6 +166,9 @@ class TechnasPay {
   /// paiement ET commission Technas, et vous recevez EXACTEMENT [amount] ; `partner`, le client paie
   /// [amount], frais compris. Absent : le réglage de votre compte. Montants avant de créer le
   /// paiement : [quote]. Par carte, seulement `partner` (`fees_customer_unavailable`).
+  ///
+  /// [networks] : les réseaux mobile money permis pour CE paiement ([Network], parmi ceux de votre
+  /// compte). Absent ou vide : tous ceux que vous avez activés.
   Future<Payment> askForPayment({
     required num amount,
     required String reference,
@@ -167,11 +182,13 @@ class TechnasPay {
     List<String>? excludedCountries,
     bool askCountry = false,
     String? fees,
+    List<String>? networks,
   }) {
     if (method != 'mobile_money' && method != 'card') {
       throw TechnasPayException('invalid_request', 'method vaut "mobile_money" ou "card"');
     }
     _checkFees(fees);
+    _checkNetworks(networks);
     method == 'card' ? _positiveAmount(amount) : _positiveInt(amount);
     var resolved = currency?.trim().toUpperCase();
     if (resolved == null || resolved.isEmpty) {
@@ -194,6 +211,7 @@ class TechnasPay {
       if (excludedCountries != null) 'excluded_countries': excludedCountries,
       if (askCountry) 'ask_country': true,
       if (fees != null) 'fees': fees,
+      if (networks != null && networks.isNotEmpty) 'networks': networks,
     });
   }
 
@@ -207,7 +225,8 @@ class TechnasPay {
   /// ```
   ///
   /// [method] : `mobile_money` (défaut) ou `card` ; [country] : pays du client (sans lui, tous les
-  /// pays de la devise) ; [network] : un réseau précis ; [currency] : sans [country], `XOF` ou `XAF`
+  /// pays de la devise) ; [network] : un réseau précis ([Network], ex. `mixx` ; un ancien code comme
+  /// `togocel` reste accepté) ; [currency] : sans [country], `XOF` ou `XAF`
   /// (obligatoire par carte) ; [fees] : `partner` ou `customer` (absent : le réglage de votre compte).
   Future<Quote> quote({required num amount, String? method, String? country, String? network, String? currency, String? fees}) async {
     _positiveAmount(amount);
@@ -316,6 +335,39 @@ class TechnasPay {
       'accept_risk': acceptRisk,
       if (markupPct != null) 'markup_pct': markupPct,
       if (homeCurrency != null) 'home_currency': homeCurrency,
+    });
+  }
+
+  /// Les moyens et réseaux ouverts pour votre compte (par pays, [country] facultatif), ce que vous
+  /// avez activé (`enabled`) et votre ordre d'affichage. Pour construire votre propre choix de
+  /// paiement, ou vos réglages.
+  Future<PaymentMethods> getPaymentMethods([String? country]) {
+    final c = country?.trim().toUpperCase();
+    return _call('GET', '/v1/payment-methods${_query({'country': (c == null || c.isEmpty) ? null : c})}', PaymentMethods.fromJson);
+  }
+
+  /// Activer ou éteindre des moyens ([PaymentMethod]) et des réseaux ([Network]), et fixer l'ordre
+  /// d'affichage sur la page de paiement. Un champ absent ne change pas ; [allNetworks] : tous les
+  /// réseaux (`networks: null` côté serveur), [allMethods] : tous les moyens.
+  Future<PaymentMethods> setPaymentMethods({
+    List<String>? methods,
+    List<String>? networks,
+    List<String>? networkOrder,
+    bool allMethods = false,
+    bool allNetworks = false,
+  }) {
+    _checkMethods(methods);
+    _checkNetworks(networks);
+    _checkNetworks(networkOrder, 'networkOrder');
+    if ((allMethods && methods != null) || (allNetworks && networks != null)) {
+      throw TechnasPayException('invalid_request', 'allMethods / allNetworks : sans methods / networks');
+    }
+    return _call('PUT', '/v1/payment-methods', PaymentMethods.fromJson, {
+      if (methods != null) 'methods': methods,
+      if (allMethods) 'methods': null,
+      if (networks != null) 'networks': networks,
+      if (allNetworks) 'networks': null,
+      if (networkOrder != null) 'network_order': networkOrder,
     });
   }
 

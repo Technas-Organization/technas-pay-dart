@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.9.0
+      ref: v0.10.0
 ```
 
 Sur le serveur, le secret remis par Technas va dans l'environnement :
@@ -86,6 +86,28 @@ final p = await pay.quote(amount: 1000, country: 'TG', fees: 'partner');
 - L'opérateur du client (Mixx by Yas, Moov…) peut prendre ses propres frais sur le téléphone, en dehors de Technas : `networks[i].operatorFeeEstimate` en donne une estimation quand on la connaît (« environ »), jamais une promesse.
 - Montant trop petit : `amount_too_low` avec `e.minimumAmount` (`TechnasPayException`). Au Togo, le réseau n'accepte rien sous 200 F : en `'partner'`, 209 F au minimum ; en `'customer'`, 200 F passent.
 - Par carte, seulement `'partner'` : ajouter des frais au paiement par carte d'un consommateur est interdit en Europe. `pay.quote(amount: 20, method: 'card', currency: 'EUR')` rend la commission (`netAmount` null : les frais de la carte dépendent de la carte du client).
+
+### Les moyens et les réseaux : à vous de choisir
+
+Les moyens (`paymentMethods` : `'mobile_money'`, `'card'`) et les réseaux mobile money (`networks` : `'mixx'` pour Mixx by Yas, `'moov'` pour Moov Money / Flooz, `'mtn_momo'`, `'orange_money'`, `'wave'`…) sont des listes fermées, à énumérer, avec une constante par valeur (`PaymentMethod.card`, `Network.mixx`, `Network.orangeMoney`…). Un réseau, c'est le porte-monnaie que le client a dans sa poche.
+
+```dart
+import 'package:technas_pay/technas_pay.dart';
+
+final ouverts = await pay.getPaymentMethods('TG');
+// ouverts.networks : [NetworkSetting(network: 'mixx', name: 'Mixx by Yas', country: 'TG', enabled: true), …] dans VOTRE ordre
+
+// Réglage du compte : éteindre la carte, mettre Mixx en premier
+await pay.setPaymentMethods(methods: [PaymentMethod.mobileMoney], networkOrder: [Network.mixx, Network.moov]);
+
+// Pour un paiement : seulement certains réseaux
+await pay.askForPayment(amount: 5000, reference: reference, customer: customer, returnUrl: returnUrl, networks: [Network.mixx]);
+```
+
+- `setPaymentMethods` : un champ absent ne change pas ; `allNetworks: true` = tous les réseaux (`allMethods: true` : tous les moyens). Une valeur hors de `paymentMethods` / `networks` est refusée avant tout appel (`invalid_request`).
+- `payment.network` : le réseau avec lequel le client a payé (une fois payé) ; `payment.networks` : les réseaux permis pour ce paiement, s'il les a restreints.
+- Refus : `method_not_enabled` (moyen éteint sur votre compte), `network_not_enabled` (réseau éteint sur votre compte), `network_not_available` (pas ouvert dans ce pays).
+- La page de paiement Technas et les devis respectent vos réseaux et leur ordre. L'étape où le client confirme sur la page du réseau de paiement peut encore lui montrer tous les réseaux du pays : ce sera fermé dans une prochaine version.
 
 ## 3. Serveur : recevoir le webhook
 
@@ -153,6 +175,7 @@ Côté serveur, renvoyez `payment.toAppJson()` : c'est le contrat qu'il lit.
 | `getRefund(id)` | Statut d'un remboursement |
 | `topUpBalance(amount:, currency:, returnUrl:?)` | Recharger le solde |
 | `quote(amount:, country:?, network:?, currency:?, fees:?, method:?)`, `getFees(...)` | Devis : ce que le client paiera, ce que vous recevrez (rien n'est créé) |
+| `getPaymentMethods([country])`, `setPaymentMethods(methods:?, networks:?, networkOrder:?, allMethods:?, allNetworks:?)` | Moyens et réseaux ouverts, activés, et leur ordre ; les régler |
 | `getBalance()`, `getSettlements()` | Solde par devise, reversements |
 | `WebhookHandlers(onSettlement:)` | Issue d'un reversement : avis `settlement.completed`, `settlement.failed` |
 | `getAccountKyc()` | Seuil d'identité : cumul, échéance, lien de la console |

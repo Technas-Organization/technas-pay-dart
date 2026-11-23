@@ -53,7 +53,9 @@ class Payment {
         customerAmount = (j['customer_amount'] as num?) ?? j['amount'] as num,
         feesPaidBy = (j['fees_paid_by'] as String?) ?? 'partner',
         customerTotal = j['customer_total'] as num?,
-        processingFee = j['processing_fee'] as num?;
+        processingFee = j['processing_fee'] as num?,
+        network = j['network'] as String?,
+        networks = (j['networks'] as List?)?.cast<String>();
 
   final String id;
   final String reference;
@@ -73,6 +75,13 @@ class Payment {
 
   /// Les frais du réseau de paiement dans [customerTotal].
   final num? processingFee;
+
+  /// Le réseau avec lequel le client a payé ([Network]), une fois payé (`null` avant, par carte,
+  /// ou sur un serveur ancien). Un réseau plus récent que ce SDK est gardé tel quel.
+  final String? network;
+
+  /// Les réseaux permis pour ce paiement, s'il les a restreints (`null` sinon).
+  final List<String>? networks;
 
   /// `null` tant que le payeur n'a pas choisi son pays sur la page de paiement.
   final String? currency;
@@ -138,7 +147,7 @@ class QuoteNetwork {
         otpRequired = j['otp_required'] == true,
         otpInstructions = j['otp_instructions'] as String?;
 
-  /// Code du réseau (ex. `togocel`).
+  /// Le réseau ([Network]), ex. `mixx`. Un réseau plus récent que ce SDK est gardé tel quel.
   final String network;
 
   /// Le nom que le client connaît (ex. « Mixx by Yas »).
@@ -411,6 +420,50 @@ class TopUp {
   final bool testMode;
   final String? createdAt;
   final String? completedAt;
+}
+
+/// Un moyen de paiement ouvert pour votre compte, et s'il est activé.
+class MethodSetting {
+  MethodSetting.fromJson(Json j)
+      : method = j['method'] as String,
+        enabled = j['enabled'] == true;
+
+  /// [PaymentMethod] : `mobile_money` ou `card`.
+  final String method;
+  final bool enabled;
+}
+
+/// Un réseau ouvert pour votre compte, dans un pays, et s'il est activé (votre réglage).
+class NetworkSetting {
+  NetworkSetting.fromJson(Json j)
+      : network = j['network'] as String,
+        name = (j['name'] as String?) ?? j['network'] as String,
+        country = j['country'] as String?,
+        currency = j['currency'] as String?,
+        enabled = j['enabled'] == true;
+
+  /// Le réseau ([Network]), ex. `mixx`.
+  final String network;
+
+  /// Le nom que le client connaît (ex. « Mixx by Yas »).
+  final String name;
+  final String? country;
+  final String? currency;
+  final bool enabled;
+}
+
+/// Les moyens et réseaux ouverts pour votre compte, ce que vous avez activé, et votre ordre.
+class PaymentMethods {
+  PaymentMethods.fromJson(Object? raw)
+      : methods = _list(_map(raw)['methods']).map(MethodSetting.fromJson).toList(),
+        networks = _list(_map(raw)['networks']).map(NetworkSetting.fromJson).toList(),
+        networkOrder = ((_map(raw)['network_order'] as List?) ?? const []).cast<String>();
+
+  final List<MethodSetting> methods;
+
+  /// Réseaux ouverts, par pays, dans VOTRE ordre d'affichage.
+  final List<NetworkSetting> networks;
+  final List<String> networkOrder;
 }
 
 class CountryRules {

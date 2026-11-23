@@ -14,6 +14,60 @@ abstract final class PaymentStatus {
   static const finals = {completed, amountMismatch, expired};
 }
 
+/// Les moyens de paiement : `mobile_money` (défaut) ou `card`.
+abstract final class PaymentMethod {
+  static const mobileMoney = 'mobile_money';
+  static const card = 'card';
+
+  /// Tous les moyens, à énumérer.
+  static const all = [mobileMoney, card];
+}
+
+/// Tous les moyens de paiement, à énumérer (`for (final m in paymentMethods)`).
+const List<String> paymentMethods = PaymentMethod.all;
+
+/// Les réseaux mobile money : le porte-monnaie que le client a dans sa poche, jamais
+/// l'intermédiaire qui fait passer le paiement. [mixx] = Mixx by Yas (ex-T-Money, Togocel),
+/// [moov] = Moov Money (Flooz au Togo). Ceux réellement ouverts, par pays :
+/// `pay.getPaymentMethods(country)`.
+///
+/// Un réseau se lit comme une chaîne : un réseau plus récent que ce SDK est gardé tel quel.
+abstract final class Network {
+  static const mixx = 'mixx';
+  static const moov = 'moov';
+  static const mtnMomo = 'mtn_momo';
+  static const orangeMoney = 'orange_money';
+  static const wave = 'wave';
+  static const airtelMoney = 'airtel_money';
+  static const freeMoney = 'free_money';
+  static const celtiisCash = 'celtiis_cash';
+  static const djamo = 'djamo';
+  static const expresso = 'expresso';
+  static const wizall = 'wizall';
+  static const mobicash = 'mobicash';
+  static const mpesa = 'mpesa';
+  static const telecelCash = 'telecel_cash';
+  static const airteltigoMoney = 'airteltigo_money';
+  static const afrimoney = 'afrimoney';
+  static const qmoney = 'qmoney';
+  static const tnmMpamba = 'tnm_mpamba';
+  static const emola = 'emola';
+  static const zamtelKwacha = 'zamtel_kwacha';
+  static const ezypesa = 'ezypesa';
+  static const halopesa = 'halopesa';
+  static const tpesa = 'tpesa';
+
+  /// Tous les réseaux, à énumérer.
+  static const all = [
+    mixx, moov, mtnMomo, orangeMoney, wave, airtelMoney, freeMoney, celtiisCash, //
+    djamo, expresso, wizall, mobicash, mpesa, telecelCash, airteltigoMoney, afrimoney, //
+    qmoney, tnmMpamba, emola, zamtelKwacha, ezypesa, halopesa, tpesa,
+  ];
+}
+
+/// Tous les réseaux mobile money (voir [Network]), à énumérer.
+const List<String> networks = Network.all;
+
 /// Vrai si le statut ne changera plus : `completed`, `expired`, `amount_mismatch`. Jamais `failed`.
 bool isFinal(String status) => PaymentStatus.finals.contains(status);
 
