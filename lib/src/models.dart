@@ -218,6 +218,185 @@ class Quote {
   final List<QuoteNetwork> networks;
 }
 
+/// Ce que vous recevez, réseau par réseau, au prix affiché.
+class DisplayPriceNetwork {
+  DisplayPriceNetwork.fromJson(Json j)
+      : country = j['country'] as String?,
+        network = j['network'] as String,
+        networkName = (j['network_name'] as String?) ?? j['network'] as String,
+        customerTotal = j['customer_total'] as num,
+        processingFee = j['processing_fee'] as num,
+        commission = j['commission'] as num,
+        netAmount = j['net_amount'] as num,
+        operatorFeeEstimate = j['operator_fee_estimate'] as num?;
+
+  final String? country;
+
+  /// Le réseau ([Network]), ex. `mixx`. Un réseau plus récent que ce SDK est gardé tel quel.
+  final String network;
+
+  /// Le nom que le client connaît (ex. « Mixx by Yas »).
+  final String networkName;
+
+  /// Ce que le client paie : jamais plus que le prix affiché.
+  final num customerTotal;
+  final num processingFee;
+  final num commission;
+
+  /// Ce que vous recevez (au moins `receive`).
+  final num netAmount;
+
+  /// Frais propres de l'opérateur du client, hors Technas : « environ », `null` = inconnus.
+  final num? operatorFeeEstimate;
+}
+
+/// Un prix affiché, avec le réseau qui vous laisse le moins.
+class DisplayPriceForCountry {
+  DisplayPriceForCountry.fromJson(Json j)
+      : price = j['price'] as num,
+        currency = j['currency'] as String?,
+        worstNetwork = DisplayPriceNetwork.fromJson(_map(j['worst_network'])),
+        netByNetwork = _list(j['net_by_network']).map(DisplayPriceNetwork.fromJson).toList();
+
+  final num price;
+  final String? currency;
+  final DisplayPriceNetwork worstNetwork;
+  final List<DisplayPriceNetwork> netByNetwork;
+}
+
+/// Le prix rond à afficher pour recevoir au moins [receive], quel que soit le réseau du client
+/// (`displayPrice`). Créez ensuite le paiement avec `amount: price` et `fees: 'partner'` : le
+/// client paie exactement ce prix, et le surplus vous reste.
+class DisplayPrice extends DisplayPriceForCountry {
+  DisplayPrice.fromJson(super.j)
+      : receive = j['receive'] as num,
+        roundTo = j['round_to'] as num,
+        countries = ((j['countries'] as List?) ?? const []).cast<String>(),
+        byCountry = _map(j['by_country']).map((pays, v) => MapEntry(pays, DisplayPriceForCountry.fromJson(_map(v)))),
+        everywhere = j['everywhere'] is Map ? DisplayPriceForCountry.fromJson(_map(j['everywhere'])) : null,
+        super.fromJson();
+
+  /// Toujours `partner` : un prix affiché fixe se paie en « vous payez les frais ».
+  String get feesPaidBy => 'partner';
+  final num receive;
+  final num roundTo;
+  final List<String> countries;
+
+  /// Un prix par pays (avec `country` ou `countries`).
+  final Map<String, DisplayPriceForCountry> byCountry;
+
+  /// Un seul prix valable dans tous ces pays ; `null` si XOF et XAF sont mélangés.
+  final DisplayPriceForCountry? everywhere;
+}
+
+/// Un palier de la grille du réseau de paiement.
+class FeeTier {
+  FeeTier.fromJson(Json j)
+      : minAmount = j['min_amount'] as num,
+        maxAmount = j['max_amount'] as num?,
+        percent = j['percent'] as num,
+        fixed = (j['fixed'] as num?) ?? 0;
+
+  final num minAmount;
+
+  /// `null` : sans plafond.
+  final num? maxAmount;
+  final num percent;
+  final num fixed;
+}
+
+/// Un exemple à 1 000 dans un mode de frais.
+class RateExample {
+  RateExample._(Json j)
+      : customerTotal = j['customer_total'] as num,
+        processingFee = j['processing_fee'] as num,
+        commission = j['commission'] as num,
+        netAmount = j['net_amount'] as num;
+
+  static RateExample? fromJson(Object? raw) => raw is Map ? RateExample._(_map(raw)) : null;
+
+  final num customerTotal;
+  final num processingFee;
+  final num commission;
+  final num netAmount;
+}
+
+/// L'exemple à 1 000 dans chaque mode (`null` : pas payable dans ce mode).
+class RateExamples {
+  RateExamples.fromJson(Json j)
+      : customer = RateExample.fromJson(j['customer']),
+        partner = RateExample.fromJson(j['partner']);
+
+  final RateExample? customer;
+  final RateExample? partner;
+}
+
+/// La commission Technas.
+class RateCommission {
+  RateCommission.fromJson(Json j)
+      : percent = (j['percent'] as num?) ?? 0,
+        fixed = (j['fixed'] as num?) ?? 0;
+
+  final num percent;
+  final num fixed;
+}
+
+/// Un réseau de la grille des frais.
+class RateNetwork {
+  RateNetwork.fromJson(Json j)
+      : network = j['network'] as String,
+        networkName = (j['network_name'] as String?) ?? j['network'] as String,
+        percent = j['percent'] as num,
+        fixed = (j['fixed'] as num?) ?? 0,
+        feeTiers = _list(j['fee_tiers']).map(FeeTier.fromJson).toList(),
+        minimumAmount = j['minimum_amount'] as num?,
+        operatorFeeEstimate = j['operator_fee_estimate'] as num?,
+        example1000 = RateExamples.fromJson(_map(j['example_1000']));
+
+  /// Le réseau ([Network]), ex. `mixx`.
+  final String network;
+  final String networkName;
+
+  /// Pourcentage du réseau de paiement (palier de 1 000).
+  final num percent;
+  final num fixed;
+  final List<FeeTier> feeTiers;
+
+  /// Le plus petit montant que le réseau accepte.
+  final num? minimumAmount;
+
+  /// Frais propres de l'opérateur du client sur 1 000, hors Technas : « environ », `null` = inconnus.
+  final num? operatorFeeEstimate;
+
+  /// Exemple à 1 000, dans chaque mode.
+  final RateExamples example1000;
+}
+
+/// Un pays de la grille des frais.
+class RateCountry {
+  RateCountry.fromJson(Json j)
+      : country = j['country'] as String,
+        currency = j['currency'] as String,
+        commission = RateCommission.fromJson(_map(j['commission'])),
+        networks = _list(j['networks']).map(RateNetwork.fromJson).toList();
+
+  final String country;
+  final String currency;
+  final RateCommission commission;
+  final List<RateNetwork> networks;
+}
+
+/// La grille des frais, par pays ouvert et par réseau (`getRates`).
+class Rates {
+  Rates.fromJson(Object? raw)
+      : feesPaidBy = (_map(raw)['fees_paid_by'] as String?) ?? 'partner',
+        countries = _list(_map(raw)['countries']).map(RateCountry.fromJson).toList();
+
+  /// Le mode de votre compte : `partner` ou `customer`.
+  final String feesPaidBy;
+  final List<RateCountry> countries;
+}
+
 class TransactionPage {
   TransactionPage(this.items, this.nextCursor);
   final List<Payment> items;

@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.10.0
+      ref: v0.11.0
 ```
 
 Sur le serveur, le secret remis par Technas va dans l'environnement :
@@ -86,6 +86,46 @@ final p = await pay.quote(amount: 1000, country: 'TG', fees: 'partner');
 - L'opérateur du client (Mixx by Yas, Moov…) peut prendre ses propres frais sur le téléphone, en dehors de Technas : `networks[i].operatorFeeEstimate` en donne une estimation quand on la connaît (« environ »), jamais une promesse.
 - Montant trop petit : `amount_too_low` avec `e.minimumAmount` (`TechnasPayException`). Au Togo, le réseau n'accepte rien sous 200 F : en `'partner'`, 209 F au minimum ; en `'customer'`, 200 F passent.
 - Par carte, seulement `'partner'` : ajouter des frais au paiement par carte d'un consommateur est interdit en Europe. `pay.quote(amount: 20, method: 'card', currency: 'EUR')` rend la commission (`netAmount` null : les frais de la carte dépendent de la carte du client).
+
+### Un prix affiché fixe, le même pour tous les clients
+
+Vous voulez recevoir 1 000 F et toujours afficher le même prix rond, quel que soit l'opérateur du client ? Demandez ce prix, puis créez le paiement en **`fees: 'partner'`** :
+
+```dart
+final d = await pay.displayPrice(receive: 1000, countries: ['TG', 'BJ'], roundTo: 50);
+d.byCountry['TG']!.price;          // le prix à afficher au Togo
+d.byCountry['BJ']!.price;          // au Bénin
+d.everywhere?.price;               // un seul prix valable dans les deux pays
+d.byCountry['TG']!.worstNetwork;   // le réseau qui vous laisse le moins (au moins 1 000)
+
+await pay.askForPayment(
+  amount: d.byCountry['TG']!.price, // le client paie EXACTEMENT ce prix
+  fees: 'partner',                  // pas 'customer' !
+  reference: 'commande-42',
+  returnUrl: 'https://boutique.example/merci',
+  customer: {'email': 'awa@example.com', 'name': 'Awa', 'country': 'TG'},
+);
+```
+
+- Le prix est le plus petit multiple de `roundTo` (50 par défaut) qui vous laisse au moins `receive` sur **chaque** réseau ouvert du pays. Ce qui dépasse vous reste.
+- ⚠️ Avec `fees: 'customer'`, le client paierait votre prix **plus** les frais : un prix fixe se paie toujours en `'partner'`.
+- `everywhere` est `null` si vous mélangez des pays en XOF et en XAF (deux monnaies, deux prix).
+- Les frais propres de l'opérateur du client (prélevés sur son téléphone, hors Technas) ne sont pas comptés.
+- `pay.getDisplayPrice(...)` est le même appel. Sans pays : `currency: 'XOF'` (défaut) ou `'XAF'`.
+
+### La grille des frais, pays par pays
+
+Pour votre back-office : par pays ouvert et par réseau, le pourcentage, le minimum, la commission Technas, l'estimation des frais de l'opérateur et un exemple à 1 000 F dans chaque mode.
+
+```dart
+final g = await pay.getRates();          // ou pay.getRates('TG'), ou pay.rates()
+for (final c in g.countries) {
+  for (final n in c.networks) {
+    print('${c.country} ${n.networkName} ${n.percent} % min ${n.minimumAmount} '
+        'client paie ${n.example1000.customer?.customerTotal} vous recevez (partner) ${n.example1000.partner?.netAmount}');
+  }
+}
+```
 
 ### Les moyens et les réseaux : à vous de choisir
 
@@ -175,6 +215,8 @@ Côté serveur, renvoyez `payment.toAppJson()` : c'est le contrat qu'il lit.
 | `getRefund(id)` | Statut d'un remboursement |
 | `topUpBalance(amount:, currency:, returnUrl:?)` | Recharger le solde |
 | `quote(amount:, country:?, network:?, currency:?, fees:?, method:?)`, `getFees(...)` | Devis : ce que le client paiera, ce que vous recevrez (rien n'est créé) |
+| `displayPrice(receive:, country:?, countries:?, currency:?, roundTo:?)`, `getDisplayPrice(...)` | Prix affiché fixe (par pays, et partout) pour recevoir au moins `receive` ; payer ensuite en `fees: 'partner'` |
+| `getRates([country])`, `rates(...)` | Grille des frais par pays et réseau, exemples à 1 000 |
 | `getPaymentMethods([country])`, `setPaymentMethods(methods:?, networks:?, networkOrder:?, allMethods:?, allNetworks:?)` | Moyens et réseaux ouverts, activés, et leur ordre ; les régler |
 | `getBalance()`, `getSettlements()` | Solde par devise, reversements |
 | `WebhookHandlers(onSettlement:)` | Issue d'un reversement : avis `settlement.completed`, `settlement.failed` |

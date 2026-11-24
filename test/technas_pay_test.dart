@@ -986,4 +986,159 @@ void main() {
       expect(seen.map((e) => e.network), ['mixx', null]);
     });
   });
+  group('prix affiché fixe et grille des frais', () {
+    (TechnasPay, List<http.Request>) client(List<(int, Object)> replies) {
+      final calls = <http.Request>[];
+      final p = TechnasPay(
+        secret: secret,
+        baseUrl: base,
+        httpClient: MockClient((r) async {
+          calls.add(r);
+          final (status, body) = replies.removeAt(0);
+          return http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
+        }),
+      );
+      return (p, calls);
+    }
+
+    Map<String, Object?> ligne(String pays, String reseau, int net) => {
+          'country': pays,
+          'network': reseau,
+          'network_name': reseau,
+          'customer_total': 1100,
+          'processing_fee': 44,
+          'commission': 22,
+          'net_amount': net,
+          'operator_fee_estimate': null,
+        };
+    final tg = {
+      'price': 1100,
+      'worst_network': ligne('TG', 'mixx', 1034),
+      'net_by_network': [ligne('TG', 'mixx', 1034)],
+      'currency': 'XOF',
+    };
+    final bj = {
+      'price': 1150,
+      'worst_network': ligne('BJ', 'mtn_momo', 1010),
+      'net_by_network': [ligne('BJ', 'mtn_momo', 1010)],
+      'currency': 'XOF',
+    };
+    final reponse = {
+      ...bj,
+      'fees_paid_by': 'partner',
+      'receive': 1000,
+      'round_to': 50,
+      'countries': ['TG', 'BJ'],
+      'by_country': {'TG': tg, 'BJ': bj},
+      'everywhere': bj,
+      'how_to_use': '…',
+      'operator_fee_note': '…',
+    };
+
+    test('displayPrice envoie receive, pays et pas, lit un prix par pays et partout', () async {
+      final (p, calls) = client([
+        (200, reponse),
+        (
+          200,
+          {
+            ...tg,
+            'fees_paid_by': 'partner',
+            'receive': 1000,
+            'round_to': 50,
+            'countries': ['TG'],
+            'by_country': {'TG': tg},
+            'everywhere': null,
+          }
+        ),
+      ]);
+      final d = await p.displayPrice(receive: 1000, countries: ['tg', 'BJ'], roundTo: 50);
+      expect(calls[0].method, 'POST');
+      expect(calls[0].url.toString(), '$base/v1/display-price');
+      expect(jsonDecode(calls[0].body), {
+        'receive': 1000,
+        'countries': ['TG', 'BJ'],
+        'round_to': 50,
+      });
+      expect([d.price, d.feesPaidBy, d.byCountry['TG']!.price, d.byCountry['BJ']!.price, d.everywhere!.price],
+          [1150, 'partner', 1100, 1150, 1150]);
+      expect([
+        d.receive,
+        d.roundTo,
+        d.countries,
+        d.currency
+      ], [
+        1000,
+        50,
+        ['TG', 'BJ'],
+        'XOF'
+      ]);
+      final w = d.worstNetwork;
+      expect([w.country, w.network, w.networkName, w.customerTotal, w.processingFee, w.commission, w.netAmount, w.operatorFeeEstimate],
+          ['BJ', 'mtn_momo', 'mtn_momo', 1100, 44, 22, 1010, null]);
+      expect(d.byCountry['TG']!.netByNetwork.single.netAmount, 1034);
+      final seul = await p.getDisplayPrice(receive: 1000, country: 'TG');
+      expect(jsonDecode(calls[1].body), {'receive': 1000, 'country': 'TG'});
+      expect([seul.everywhere, seul.price], [null, 1100]);
+      await expectLater(p.displayPrice(receive: 0), throwsA(isA<TechnasPayException>().having((e) => e.status, 'status', 0)));
+      expect(calls, hasLength(2));
+    });
+
+    test('getRates et rates lisent pays, réseaux, commission et exemples', () async {
+      final grille = {
+        'fees_paid_by': 'customer',
+        'countries': [
+          {
+            'country': 'TG',
+            'currency': 'XOF',
+            'commission': {'percent': 2, 'fixed': 0},
+            'networks': [
+              {
+                'network': 'mixx',
+                'network_name': 'Mixx by Yas',
+                'percent': 4.1,
+                'fixed': 0,
+                'fee_tiers': [
+                  {'min_amount': 200, 'max_amount': 100000000, 'percent': 4.1, 'fixed': 0},
+                  {'min_amount': 100000001, 'max_amount': null, 'percent': 3},
+                ],
+                'minimum_amount': 200,
+                'operator_fee_estimate': 10,
+                'example_1000': {
+                  'customer': {'customer_total': 1064, 'processing_fee': 44, 'commission': 20, 'net_amount': 1000},
+                  'partner': {'customer_total': 1000, 'processing_fee': 40, 'commission': 20, 'net_amount': 940},
+                },
+              },
+              {
+                'network': 'moov',
+                'network_name': 'Moov Money',
+                'percent': 4.5,
+                'example_1000': {'customer': null, 'partner': null},
+              },
+            ],
+          },
+        ],
+        'note': '…',
+      };
+      final (p, calls) = client([(200, grille), (200, grille)]);
+      final g = await p.getRates('tg');
+      expect(calls[0].method, 'GET');
+      expect(calls[0].url.toString(), '$base/v1/rates?country=TG');
+      final pays = g.countries.single;
+      final mixx = pays.networks[0];
+      final moov = pays.networks[1];
+      expect(
+          [g.feesPaidBy, pays.country, pays.currency, pays.commission.percent, mixx.percent, mixx.minimumAmount, mixx.operatorFeeEstimate],
+          ['customer', 'TG', 'XOF', 2, 4.1, 200, 10]);
+      final ex = mixx.example1000.partner!;
+      expect([ex.customerTotal, ex.processingFee, ex.commission, ex.netAmount], [1000, 40, 20, 940]);
+      expect(mixx.example1000.customer!.customerTotal, 1064);
+      expect([mixx.feeTiers[0].minAmount, mixx.feeTiers[0].maxAmount, mixx.feeTiers[0].percent, mixx.feeTiers[0].fixed],
+          [200, 100000000, 4.1, 0]);
+      expect([mixx.feeTiers[1].maxAmount, mixx.feeTiers[1].fixed], [null, 0]);
+      expect([moov.fixed, moov.feeTiers, moov.minimumAmount, moov.example1000.customer, moov.example1000.partner],
+          [0, isEmpty, null, null, null]);
+      await p.rates();
+      expect(calls[1].url.toString(), '$base/v1/rates');
+    });
+  });
 }

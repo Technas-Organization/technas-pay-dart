@@ -1,3 +1,9 @@
+## 0.11.0 — 2026-11-24
+
+- Un prix affiché fixe : `pay.displayPrice(receive:, country: ?, countries: ?, currency: ?, roundTo: ?)` (ou `getDisplayPrice`) → `DisplayPrice` : le plus petit prix rond qui vous laisse au moins `receive` sur chaque réseau ; `byCountry` (un prix par pays), `everywhere` (un prix valable partout, `null` si XOF et XAF sont mélangés), `worstNetwork`, `netByNetwork` (`DisplayPriceNetwork`). Le paiement se crée ensuite en `fees: 'partner'`.
+- La grille des frais : `pay.getRates([country])` (ou `rates`) → `Rates` : par pays et par réseau, pourcentage, paliers (`FeeTier`), minimum, commission Technas, estimation des frais de l'opérateur, exemple à 1 000 dans chaque mode (`example1000.customer` / `.partner`).
+- `technas_pay_flutter` inchangé (0.4.1).
+
 ## 0.10.0 — 2026-11-23
 
 - Les moyens et les réseaux, en listes fermées : constantes `paymentMethods` et `networks` (aussi `PaymentMethod.all`, `Network.all`), une constante par valeur (`PaymentMethod.mobileMoney`, `PaymentMethod.card`, `Network.mixx` pour Mixx by Yas, `Network.moov` pour Moov Money / Flooz, `Network.mtnMomo`, `Network.orangeMoney`, `Network.wave`…). Exportées aussi par `package:technas_pay/app.dart`.

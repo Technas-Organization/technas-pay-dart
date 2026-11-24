@@ -27,7 +27,7 @@ dependencies:
   technas_pay:
     git:
       url: https://github.com/Technas-Organization/technas-pay-dart.git
-      ref: v0.10.0
+      ref: v0.11.0
 ```
 
 ## Quelle méthode pour quoi
@@ -36,6 +36,8 @@ dependencies:
 |---|---|
 | Faire payer une commande | `pay.askForPayment(amount: ..., reference: retryReference(orderId, attempt), customer: {'email': ..., 'name': ...}, returnUrl: ...)`, puis rendre `payment.checkoutUrl` à l'app ou rediriger (303) |
 | Savoir combien le client paiera et combien vous recevrez, avant de créer le paiement | `pay.quote(amount: ..., country: ..., fees: ?)` (ou `pay.getFees`) → `customerTotal` (à afficher au client), `processingFee`, `commission`, `netAmount`, `networks` |
+| Afficher un prix FIXE (le même quel que soit le réseau) et recevoir au moins X | `pay.displayPrice(receive: ..., country: ? \| countries: [...], roundTo: ?)` → `byCountry[pays]!.price`, `everywhere?.price` ; puis `askForPayment(amount: price, fees: 'partner')` (jamais `'customer'`) |
+| La grille des frais par pays et réseau (back-office) | `pay.getRates([country])` (ou `pay.rates`) → `countries[].networks[]` : `percent`, `minimumAmount`, `commission`, `operatorFeeEstimate`, `example1000.customer/partner` |
 | Faire payer TOUS les frais au client (vous recevez exactement `amount`) | `fees: 'customer'` dans `askForPayment` (ou réglage du compte) ; `'partner'` : le client paie `amount`, frais compris |
 | Lister les moyens et réseaux ouverts, ce qui est activé, l'ordre | `pay.getPaymentMethods(country)` ; constantes `paymentMethods`, `networks` (une constante par valeur : `PaymentMethod.card`, `Network.mixx`…) |
 | Activer / éteindre des moyens et réseaux, fixer l'ordre d'affichage | `pay.setPaymentMethods(methods: ?, networks: ?, networkOrder: ?)` ; par paiement : `networks: [...]` dans `askForPayment` |

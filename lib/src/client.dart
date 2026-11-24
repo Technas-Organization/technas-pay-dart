@@ -10,7 +10,7 @@ import 'models.dart';
 import 'status.dart';
 import 'webhooks.dart';
 
-const _version = '0.10.0';
+const _version = '0.11.0';
 const defaultBaseUrl = 'https://pay-api.technas.fr';
 const secretEnv = 'TECHNAS_PAY_SECRET';
 
@@ -249,6 +249,49 @@ class TechnasPay {
   /// Même chose que [quote] : combien le client paiera, combien vous recevrez.
   Future<Quote> getFees({required num amount, String? method, String? country, String? network, String? currency, String? fees}) =>
       quote(amount: amount, method: method, country: country, network: network, currency: currency, fees: fees);
+
+  /// Le prix affiché FIXE : le plus petit prix rond qui vous laisse au moins [receive], quel que
+  /// soit le réseau du client. Créez ensuite le paiement avec ce prix et `fees: 'partner'` (jamais
+  /// `'customer'` : le client paierait le prix PLUS les frais).
+  ///
+  /// ```dart
+  /// final d = await pay.displayPrice(receive: 1000, countries: ['TG', 'BJ'], roundTo: 50);
+  /// d.byCountry['TG']!.price; // le prix à afficher au Togo
+  /// d.everywhere?.price;      // un seul prix valable dans les deux pays
+  /// await pay.askForPayment(amount: d.byCountry['TG']!.price, fees: 'partner', ...);
+  /// ```
+  ///
+  /// [country] : un pays ; [countries] : plusieurs pays (`byCountry`, et `everywhere`, `null` si
+  /// XOF et XAF sont mélangés) ; [currency] : sans pays, `XOF` (défaut) ou `XAF` ; [roundTo] : le
+  /// pas du prix (défaut 50). Les frais propres de l'opérateur du client ne sont pas comptés.
+  Future<DisplayPrice> displayPrice(
+      {required num receive, String? country, List<String>? countries, String? currency, num? roundTo}) async {
+    _positiveAmount(receive);
+    final c = country?.trim().toUpperCase();
+    final cur = currency?.trim().toUpperCase();
+    return _call('POST', '/v1/display-price', (d) => DisplayPrice.fromJson(d as Json), {
+      'receive': receive,
+      if (c != null && c.isNotEmpty) 'country': c,
+      if (countries != null && countries.isNotEmpty) 'countries': [for (final p in countries) p.trim().toUpperCase()],
+      if (cur != null && cur.isNotEmpty) 'currency': cur,
+      if (roundTo != null && roundTo != 0) 'round_to': roundTo,
+    });
+  }
+
+  /// Même chose que [displayPrice].
+  Future<DisplayPrice> getDisplayPrice({required num receive, String? country, List<String>? countries, String? currency, num? roundTo}) =>
+      displayPrice(receive: receive, country: country, countries: countries, currency: currency, roundTo: roundTo);
+
+  /// La grille des frais, par pays ouvert et par réseau : pourcentage, paliers, minimum, commission
+  /// Technas, estimation des frais de l'opérateur, et un exemple à 1 000 dans chaque mode
+  /// (`example1000.customer` / `.partner`). [country] facultatif.
+  Future<Rates> getRates([String? country]) {
+    final c = country?.trim().toUpperCase();
+    return _call('GET', '/v1/rates${_query({'country': (c == null || c.isEmpty) ? null : c})}', Rates.fromJson);
+  }
+
+  /// Même chose que [getRates].
+  Future<Rates> rates([String? country]) => getRates(country);
 
   Future<Payment> getPayment(String id) async => _call('GET', '/v1/payments/${_seg(id)}', (d) => Payment.fromJson(d as Json));
 
